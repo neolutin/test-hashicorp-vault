@@ -41,7 +41,7 @@ jobs:
     - name: Init
       run: terraform init
     - name: Plan
-      run: terraform plan -input=false
+      run: terraform plan -input=false -var 'suffix=vault-tst-01'
 
   deployInfra:
     environment:
@@ -58,10 +58,6 @@ jobs:
       uses: hashicorp/setup-terraform@v1.2.1
       with:
         terraform_version: 1.0
-    - name: Setup Environment
-      run: |
-        echo suffix = "vault-prd-01" > terraform.tfvars
-      working-directory: terraform
     - name: Deploy
-      run: terraform init && terraform plan -input=false -out='out.tfplan' && terraform apply out.tfplan
+      run: terraform init && terraform plan -input=false -var 'suffix=vault-prd-01' -out='out.tfplan' && terraform apply out.tfplan
       working-directory: terraform
