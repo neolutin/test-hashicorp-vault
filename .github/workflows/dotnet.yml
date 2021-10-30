@@ -1,0 +1,63 @@
+name: test-hashicorp-vault
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'     
+        required: true
+        default: 'warning'
+      tags:
+        description: 'Manual tag'
+
+jobs:
+  terraformPack:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1.2.1
+      with:
+        terraform_version: 1.0
+    - name: Replace env vars in file
+      uses: falnyr/replace-env-vars-action@v1.2.1
+      env:
+        TERRAFORMSTORAGE_KEY: ${{ secrets.TERRAFORMSTORAGE_KEY }}
+        AZURETENANT_ID: ${{ secrets.AZURETENANT_ID }}
+        AZURESUSCRIPTION_ID: ${{ secrets.AZURESUSCRIPTION_ID }}
+        TERRAFORMCLIENT_ID: ${{ secrets.TERRAFORMCLIENT_ID }}
+        TERRAFORMCLIENT_SECRET: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+      with:
+        filename: provider.tf
+    - name: Upload terraform Artifact
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: terraform
+        path: .
+    - name: Init
+      run: terraform init
+    - name: Plan
+      run: terraform plan -input=false -var 'suffix=vault-tst-01'
+
+  deployInfra:
+    environment:
+      name: production
+    needs: terraformPack
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download terraform Artifact
+      uses: actions/download-artifact@v2.0.10
+      with:
+        name: terraform
+        path: terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1.2.1
+      with:
+        terraform_version: 1.0
+    - name: Deploy
+      run: terraform init && terraform plan -input=false -var 'suffix=vault-prd-01' -out='out.tfplan' && terraform apply out.tfplan
+      working-directory: terraform

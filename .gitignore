@@ -27,3 +27,12 @@ override.tf.json
 
 # Include tfplan files to ignore the plan output of command: terraform plan -out=tfplan
 # example: *tfplan*
+
+.terraform.lock.hcl
+
+# Ignore local files, used for tests on local machine
+*.local.*
+
+# Include public keys
+.ssh/
+!.ssh/*.pub
