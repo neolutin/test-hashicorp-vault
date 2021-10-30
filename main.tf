@@ -18,6 +18,23 @@ resource "azurerm_subnet" "internal" {
   address_prefixes     = ["10.0.2.0/24"]
 }
 
+resource "azurerm_network_security_group" "webserver" {
+  name                = "tls_webserver"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  security_rule {
+    access                     = "Allow"
+    direction                  = "Inbound"
+    name                       = "tls"
+    priority                   = 100
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    source_address_prefix      = "*"
+    destination_port_range     = "443"
+    destination_address_prefix = "10.0.2.0/24"
+  }
+}
+
 resource "azurerm_availability_set" "availability" {
   name                = "aset-${var.suffix}"
   location            = azurerm_resource_group.main.location
@@ -32,15 +49,17 @@ module "vm1" {
   resource_group_name = azurerm_resource_group.main.name
   availability_set_id = azurerm_availability_set.availability.id
   subnet_id           = azurerm_subnet.internal.id
+  security_group_id   = azurerm_network_security_group.webserver.id
   tags                = var.tags
 }
 
 module "vm2" {
   source              = "./virtual-machine"
   resource_group_name = azurerm_resource_group.main.name
-  location            = "northeurope"
+  location            = azurerm_resource_group.main.location
   availability_set_id = azurerm_availability_set.availability.id
   suffix              = "vm2-${var.suffix}"
   subnet_id           = azurerm_subnet.internal.id
+  security_group_id   = azurerm_network_security_group.webserver.id
   tags                = var.tags
 }
