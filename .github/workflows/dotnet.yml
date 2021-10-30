@@ -32,7 +32,7 @@ jobs:
         TERRAFORMCLIENT_ID: ${{ secrets.TERRAFORMCLIENT_ID }}
         TERRAFORMCLIENT_SECRET: ${{ secrets.TERRAFORMCLIENT_SECRET }}
       with:
-        filename: terraform/provider.tf
+        filename: provider.tf
     - name: Upload terraform Artifact
       uses: actions/upload-artifact@v2.2.4
       with:
@@ -40,10 +40,8 @@ jobs:
         path: .
     - name: Init
       run: terraform init
-      working-directory: terraform
     - name: Plan
       run: terraform plan -input=false
-      working-directory: terraform
 
   deployInfra:
     environment:
