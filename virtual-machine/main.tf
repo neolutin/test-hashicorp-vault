@@ -33,26 +33,9 @@ resource "azurerm_network_interface" "internal" {
   }
 }
 
-resource "azurerm_network_security_group" "webserver" {
-  name                = "tls_webserver"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  security_rule {
-    access                     = "Allow"
-    direction                  = "Inbound"
-    name                       = "tls"
-    priority                   = 100
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    source_address_prefix      = "*"
-    destination_port_range     = "443"
-    destination_address_prefix = azurerm_network_interface.main.private_ip_address
-  }
-}
-
 resource "azurerm_network_interface_security_group_association" "main" {
   network_interface_id      = azurerm_network_interface.internal.id
-  network_security_group_id = azurerm_network_security_group.webserver.id
+  network_security_group_id = var.security_group_id
 }
 
 resource "azurerm_linux_virtual_machine" "main" {
@@ -77,7 +60,7 @@ resource "azurerm_linux_virtual_machine" "main" {
   source_image_reference {
     publisher = "Canonical"
     offer     = "UbuntuServer"
-    sku       = "20.04-LTS"
+    sku       = "18.04-LTS"
     version   = "latest"
   }
 
@@ -96,7 +79,7 @@ resource "azurerm_virtual_machine_extension" "installvault" {
 
   settings = <<SETTINGS
     {
-        "commandToExecute": "curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add - && sudo apt-add-repository 'deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main' && sudo apt-get update && sudo apt-get install vault"
+        "commandToExecute": "curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add - && sudo apt-add-repository \"deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main\" && sudo apt-get update && sudo apt-get install vault"
     }
 SETTINGS
 
