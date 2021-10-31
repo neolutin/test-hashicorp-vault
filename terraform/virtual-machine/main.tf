@@ -42,13 +42,11 @@ resource "azurerm_virtual_machine_extension" "installvault" {
 
   settings = <<SETTINGS
     {
-        "commandToExecute": "curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add - && sudo apt-add-repository \"deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main\" && sudo apt-get update && sudo apt-get install vault"
+        "commandToExecute": "curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add - && sudo apt-add-repository \"deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main\" && sudo apt-get update && sudo apt-get install -y vault"
     }
 SETTINGS
 
-  tags = {
-    environment = "Production"
-  }
+  tags = var.tags
 }
 
 output "vm_ip_addr" {

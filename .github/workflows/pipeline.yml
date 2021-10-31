@@ -1,4 +1,4 @@
-name: test-hashicorp-vault
+name: Deploy Hashicorp Vault
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       logLevel:
-        description: 'Log level'     
+        description: 'Log level'
         required: true
         default: 'warning'
       tags:
@@ -23,38 +23,25 @@ jobs:
       uses: hashicorp/setup-terraform@v1.2.1
       with:
         terraform_version: 1.0
-    - name: Replace env vars in file
-      uses: falnyr/replace-env-vars-action@v1.2.1
-      env:
-        TERRAFORMSTORAGE_KEY: ${{ secrets.TERRAFORMSTORAGE_KEY }}
-        AZURETENANT_ID: ${{ secrets.AZURETENANT_ID }}
-        AZURESUSCRIPTION_ID: ${{ secrets.AZURESUSCRIPTION_ID }}
-        TERRAFORMCLIENT_ID: ${{ secrets.TERRAFORMCLIENT_ID }}
-        TERRAFORMCLIENT_SECRET: ${{ secrets.TERRAFORMCLIENT_SECRET }}
-      with:
-        filename: terraform/provider.tf
     - name: Upload terraform Artifact
       uses: actions/upload-artifact@v2.2.4
       with:
         name: terraform
         path: terraform
-    - name: Init
-      run: terraform init
-      working-directory: terraform
-    - name: Plan
-      run: terraform plan -input=false -var 'suffix=vault-prd-01'
-      working-directory: terraform
+    - name: Upload vault config
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: vault
+        path: vault
 
-  deployInfra:
-    environment:
-      name: production
+  stagingInfra:
     needs: terraformPack
     runs-on: ubuntu-latest
     outputs:
-      vmip: ${{ steps.deployvault.outputs.vmip }}
-      simpleuser: ${{ steps.deployvault.outputs.simpleuser }}
+      vmip: ${{ steps.getinfravalues.outputs.vmip }}
+      simpleuser: ${{ steps.getinfravalues.outputs.simpleuser }}
     env:
-      RESOURCES_NAME: "vault-prd-01"
+      RESOURCES_NAME: "vault-stag-01"
     steps:
     - name: Download terraform Artifact
       uses: actions/download-artifact@v2.0.10
@@ -65,6 +52,7 @@ jobs:
       uses: hashicorp/setup-terraform@v1.2.1
       with:
         terraform_version: 1.0
+        terraform_wrapper: false
     - name: Replace env vars in file
       uses: falnyr/replace-env-vars-action@v1.2.1
       env:
@@ -74,37 +62,82 @@ jobs:
         TERRAFORMCLIENT_ID: ${{ secrets.TERRAFORMCLIENT_ID }}
         TERRAFORMCLIENT_SECRET: ${{ secrets.TERRAFORMCLIENT_SECRET }}
       with:
-        filename: vault\config.hcl
+        filename: terraform/provider.tf
     - name: Deploy
-      id: deployvault
       run: |
         terraform init
         terraform plan -input=false -var 'suffix=${{ env.RESOURCES_NAME }}' -out='out.tfplan'
         terraform apply out.tfplan
-        $vmip = terraform output -raw vm1_ip_addr
+      working-directory: terraform
+    - name: 'Get Infra Outputs'
+      id: getinfravalues
+      run: |
+        vmip=$(terraform output -json -no-color vm1_ip_addr | jq -r .)
+        simpleuser=$(terraform output -json -no-color simple_password | jq -r .value)
         echo ::set-output name=vmip::$vmip
-        $simple_password = terraform -chdir=terraform output -raw simple_password
-        echo ::set-output name=simpleuser::$simple_password
+        echo ::set-output name=simpleuser::$simpleuser
       working-directory: terraform
 
-  setupVault:
-    environment:
-      name: production
-    needs: deployInfra
+  setupStagingVault:
+    needs: stagingInfra
     runs-on: ubuntu-latest
     steps:
+    - name: Download vault config
+      uses: actions/download-artifact@v2.0.10
+      with:
+        name: vault
+        path: vault
+    - name: Replace env vars in file
+      uses: falnyr/replace-env-vars-action@v1.2.1
+      env:
+        TERRAFORMSTORAGE_KEY: ${{ secrets.TERRAFORMSTORAGE_KEY }}
+        AZURETENANT_ID: ${{ secrets.AZURETENANT_ID }}
+        AZURESUSCRIPTION_ID: ${{ secrets.AZURESUSCRIPTION_ID }}
+        TERRAFORMCLIENT_ID: ${{ secrets.TERRAFORMCLIENT_ID }}
+        TERRAFORMCLIENT_SECRET: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+      with:
+        filename: vault/config.hcl
     - name: Setup Vault
       run: |
-        scp -i .\.ssh\id_rsa adminuser@$vmip vault/config.hcl '$HOME/config.hcl'
-        ssh -i .\.ssh\id_rsa -l adminuser $vmip 'mkdir -p $HOME/vault/data && \
-          vault server -config=config.hcl'
-    - name: Setup Vault User
-      run: |
-        ssh -i .\.ssh\id_rsa -l adminuser ${{ needs.deployInfra.outputs.vmip }} 'vault auth enable userpass && \
-          vault write auth/userpass/users/simple password=${{ needs.deployInfra.outputs.simpleuser }} policies=default && \
-          vault secrets enable -path=production production && \
-          vault kv put production/my-secret value="${{ secrets.FIRST_SECRET }}"'
+        echo '${{ env.VM_SSH_KEY }}' > ./id_rsa
+        scp -i ./id_rsa ./vault/config.hcl 'adminuser@${{ needs.stagingInfra.outputs.vmip }}:$HOME/'
+        ssh -i ./id_rsa -l adminuser ${{ needs.stagingInfra.outputs.vmip }} 'cd $HOME/ && mkdir -p 'vault/data' && \
+          vault server -config=./config.hcl'
+        rm --force ./id_rsa
+      env:
+        VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
     - name: Setup Vault kv
       run: |
-        ssh -i .\.ssh\id_rsa -l adminuser ${{ needs.deployInfra.outputs.vmip }} 'vault secrets enable -path=production production && \
-          vault kv put production/my-secret value=${{ secrets.FIRST_SECRET }}"'
+        echo '${{ env.VM_SSH_KEY }}' > ./id_rsa
+        ssh -i ./id_rsa -l adminuser ${{ needs.stagingInfra.outputs.vmip }} 'vault secrets enable -path=staging staging && \
+          vault kv put staging/my-secret value=notS0S33cret!"'
+        rm --force ./id_rsa
+      env:
+        VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+    - name: Setup Vault User
+      run: |
+        echo '${{ env.VM_SSH_KEY }}' > ./id_rsa
+        ssh -i ./id_rsa -l adminuser ${{ needs.stagingInfra.outputs.vmip }} 'vault auth enable userpass && \
+          vault write auth/userpass/users/simple password=${{ fromJson(needs.stagingInfra.outputs.jsoninfra).simple_password.value.value }} policies=default'
+        rm --force ./id_rsa
+      env:
+        VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+
+  prodInfra:
+    environment:
+      name: production
+    needs: terraformPack
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      vmip: ${{ steps.deployvault.outputs.vmip }}
+      simpleuser: ${{ steps.deployvault.outputs.simpleuser }}
+    env:
+      RESOURCES_NAME: "vault-prd-01"
+    steps:
+    - name: Deploy
+      id: deployvault
+      run: |
+        echo TODO
+        echo ::set-output name=vmip::127.0.0.1
+        echo ::set-output name=simpleuser::notS0S3cur3d@

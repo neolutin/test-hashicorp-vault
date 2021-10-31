@@ -4,7 +4,7 @@ terraform {
   backend "azurerm" {
     storage_account_name = "saterraformneolutin"
     container_name       = "hashicorpvault"
-    key                  = "dev01/terraform.tfstate"
+    key                  = "__GITHUB_WORKFLOW__/__RESOURCES_NAME__.tfstate"
     access_key           = "__TERRAFORMSTORAGE_KEY__=="
   }
 }

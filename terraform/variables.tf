@@ -6,7 +6,6 @@ variable "tags" {
     type = map
     default = {
       "Terraform" = "true"
-      "environment" = "prod"
     }
     description = "Azure Resource Tags"
 }
