@@ -3,5 +3,5 @@
 # Manual Setup
 * Create Terraform Storage Account (once for all terraform projects)
 * Create specific container (to be done for each project)
-* Register Azure resource prociders (Microsoft.Network, Microsoft.Compute...)
+* Register Azure resource prociders (Microsoft.Network, Microsoft.Compute, Microsoft.KeyVault...)
 * Create GitHub Secrets
