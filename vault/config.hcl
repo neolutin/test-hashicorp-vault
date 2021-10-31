@@ -15,7 +15,7 @@ seal "azurekeyvault" {
   tenant_id      = "__AZURETENANT_ID__"
   client_id      = "__TERRAFORMCLIENT_ID__"
   client_secret  = "__TERRAFORMCLIENT_SECRET__"
-  vault_name     = "kv-__RESOURCES_NAME__"
+  vault_name     = "__KV_NAME__"
   key_name       = "vaultkey"
 }
 
