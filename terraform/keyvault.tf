@@ -19,12 +19,17 @@ resource "azurerm_key_vault_access_policy" "main_kv_open_policy" {
   secret_permissions = [
     "Get", "Set", "Delete", "Purge"
   ]
+  key_permissions    = [
+    "create",
+    "get",
+    "purge",
+    "recover"
+  ]
   certificate_permissions = []
-  key_permissions         = []
   storage_permissions     = []
 }
 
-resource "random_password" "password1" {
+resource "random_password" "password" {
   length           = 20
   special          = true
   override_special = "_%@"
@@ -34,25 +39,25 @@ resource "random_password" "password1" {
   min_upper        = 1
 }
 
-resource "random_password" "password2" {
-  length           = 20
-  special          = true
-  override_special = "_%@"
-  min_lower        = 1
-  min_numeric      = 1
-  min_special      = 1
-  min_upper        = 1
-}
-
-resource "azurerm_key_vault_secret" "vault_key" {
+resource "azurerm_key_vault_key" "vaultkey" {
   name         = "vaultkey"
-  value        = random_password.password1.result
   key_vault_id = azurerm_key_vault.main_kv.id
+  key_type     = "RSA"
+  key_size     = 2048
+
+  key_opts = [
+    "decrypt",
+    "encrypt",
+    "sign",
+    "unwrapKey",
+    "verify",
+    "wrapKey",
+  ]
 }
 
 resource "azurerm_key_vault_secret" "simple_user_password" {
   name         = "simplepassword"
-  value        = random_password.password2.result
+  value        = random_password.password.result
   key_vault_id = azurerm_key_vault.main_kv.id
 }
 

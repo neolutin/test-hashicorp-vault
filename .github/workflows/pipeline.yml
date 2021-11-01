@@ -97,31 +97,48 @@ jobs:
         TERRAFORMCLIENT_SECRET: ${{ secrets.TERRAFORMCLIENT_SECRET }}
       with:
         filename: vault/config.hcl
+    - name: Copy vault config
+      uses: garygrossgarten/github-action-scp@release
+      with:
+        local: ./vault/config.hcl
+        remote: ./config.hcl
+        host: ${{ needs.stagingInfra.outputs.vmip }}
+        username: adminuser
+        privateKey: ${{ secrets.VM_SSH_KEY }}
+    - name: Test ssh action
+      uses: appleboy/ssh-action@v0.1.4
+      with:
+        host: ${{ needs.stagingInfra.outputs.vmip }}
+        username: adminuser
+        key: ${{ secrets.VM_SSH_KEY }}
+        script: whoami
     - name: Setup Vault
-      run: |
-        echo '${{ env.VM_SSH_KEY }}' > ./id_rsa
-        scp -i ./id_rsa ./vault/config.hcl 'adminuser@${{ needs.stagingInfra.outputs.vmip }}:$HOME/'
-        ssh -i ./id_rsa -l adminuser ${{ needs.stagingInfra.outputs.vmip }} 'cd $HOME/ && mkdir -p 'vault/data' && \
-          vault server -config=./config.hcl'
-        rm --force ./id_rsa
-      env:
-        VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+      uses: appleboy/ssh-action@v0.1.4
+      with:
+        host: ${{ needs.stagingInfra.outputs.vmip }}
+        username: adminuser
+        key: ${{ secrets.VM_SSH_KEY }}
+        script: |
+          mkdir -p 'vault/data'
+          vault server -config=./config.hcl
     - name: Setup Vault kv
-      run: |
-        echo '${{ env.VM_SSH_KEY }}' > ./id_rsa
-        ssh -i ./id_rsa -l adminuser ${{ needs.stagingInfra.outputs.vmip }} 'vault secrets enable -path=staging staging && \
-          vault kv put staging/my-secret value=notS0S33cret!"'
-        rm --force ./id_rsa
-      env:
-        VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+      uses: appleboy/ssh-action@v0.1.4
+      with:
+        host: ${{ needs.stagingInfra.outputs.vmip }}
+        username: adminuser
+        key: ${{ secrets.VM_SSH_KEY }}
+        script: |
+          vault secrets enable -path=staging staging
+          vault kv put staging/my-secret value='notS0S33cret!'
     - name: Setup Vault User
-      run: |
-        echo '${{ env.VM_SSH_KEY }}' > ./id_rsa
-        ssh -i ./id_rsa -l adminuser ${{ needs.stagingInfra.outputs.vmip }} 'vault auth enable userpass && \
-          vault write auth/userpass/users/simple password=${{ fromJson(needs.stagingInfra.outputs.jsoninfra).simple_password.value.value }} policies=default'
-        rm --force ./id_rsa
-      env:
-        VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+      uses: appleboy/ssh-action@v0.1.4
+      with:
+        host: ${{ needs.stagingInfra.outputs.vmip }}
+        username: adminuser
+        key: ${{ secrets.VM_SSH_KEY }}
+        script: |
+          vault auth enable userpass
+          vault write auth/userpass/users/simple password=${{ needs.stagingInfra.outputs.simpleuser }} policies=default
 
   prodInfra:
     environment:
@@ -129,9 +146,6 @@ jobs:
     needs: terraformPack
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
-    outputs:
-      vmip: ${{ steps.deployvault.outputs.vmip }}
-      simpleuser: ${{ steps.deployvault.outputs.simpleuser }}
     env:
       RESOURCES_NAME: "vault-prd-01"
     steps:
