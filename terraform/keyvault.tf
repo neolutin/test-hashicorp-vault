@@ -9,6 +9,11 @@ resource "azurerm_key_vault" "main_kv" {
 
   sku_name = "standard"
   tags     = var.tags
+  
+  network_acls {
+    default_action = "Allow"
+    bypass         = "AzureServices"
+  }
 }
 
 resource "azurerm_key_vault_access_policy" "main_kv_open_policy" {
@@ -23,7 +28,9 @@ resource "azurerm_key_vault_access_policy" "main_kv_open_policy" {
     "create",
     "get",
     "purge",
-    "recover"
+    "recover",
+    "wrapKey",
+    "unwrapKey",
   ]
   certificate_permissions = []
   storage_permissions     = []

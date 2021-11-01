@@ -81,6 +81,9 @@ jobs:
   setupStagingVault:
     needs: stagingInfra
     runs-on: ubuntu-latest
+    env:
+      RESOURCES_NAME: "vault-stag-01"
+      KV_ENV: staging
     steps:
     - name: Download vault config
       uses: actions/download-artifact@v2.0.10
@@ -101,17 +104,18 @@ jobs:
       uses: garygrossgarten/github-action-scp@release
       with:
         local: ./vault/config.hcl
-        remote: ./config.hcl
+        remote: config.hcl
         host: ${{ needs.stagingInfra.outputs.vmip }}
         username: adminuser
         privateKey: ${{ secrets.VM_SSH_KEY }}
-    - name: Test ssh action
-      uses: appleboy/ssh-action@v0.1.4
+    - name: Copy vault systemd config
+      uses: garygrossgarten/github-action-scp@release
       with:
+        local: ./vault/vault.service
+        remote: vault.service
         host: ${{ needs.stagingInfra.outputs.vmip }}
         username: adminuser
-        key: ${{ secrets.VM_SSH_KEY }}
-        script: whoami
+        privateKey: ${{ secrets.VM_SSH_KEY }}
     - name: Setup Vault
       uses: appleboy/ssh-action@v0.1.4
       with:
@@ -119,8 +123,19 @@ jobs:
         username: adminuser
         key: ${{ secrets.VM_SSH_KEY }}
         script: |
-          mkdir -p 'vault/data'
-          vault server -config=./config.hcl
+          sudo cp config.hcl /etc/vault.d/vault.hcl
+          sudo cp vault.service /etc/systemd/system/vault.service
+          export VAULT_ADDR=http://127.0.0.1:8200
+          export VAULT_SKIP_VERIFY=true
+          sudo mkdir -p '/vault/data'
+          sudo chown -R vault:vault /vault/
+          sudo systemctl daemon-reload
+          sudo systemctl unmask vault
+          sudo systemctl enable vault
+          sudo systemctl start vault
+          vault operator init
+          vault auth enable userpass
+          vault write auth/userpass/users/simple password=${{ needs.stagingInfra.outputs.simpleuser }} policies=default
     - name: Setup Vault kv
       uses: appleboy/ssh-action@v0.1.4
       with:
@@ -128,17 +143,11 @@ jobs:
         username: adminuser
         key: ${{ secrets.VM_SSH_KEY }}
         script: |
-          vault secrets enable -path=staging staging
-          vault kv put staging/my-secret value='notS0S33cret!'
-    - name: Setup Vault User
-      uses: appleboy/ssh-action@v0.1.4
-      with:
-        host: ${{ needs.stagingInfra.outputs.vmip }}
-        username: adminuser
-        key: ${{ secrets.VM_SSH_KEY }}
-        script: |
-          vault auth enable userpass
-          vault write auth/userpass/users/simple password=${{ needs.stagingInfra.outputs.simpleuser }} policies=default
+          export VAULT_ADDR=http://127.0.0.1:8200
+          export VAULT_SKIP_VERIFY=true
+          vault login -no-print -method=userpass username=simple password=${{ needs.stagingInfra.outputs.simpleuser }}
+          vault secrets enable -path=${{ env.KV_ENV }} ${{ env.KV_ENV }}
+          vault kv put ${{ env.KV_ENV }}/my-secret value='notS0S33cret!'
 
   prodInfra:
     environment:
@@ -147,7 +156,8 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     env:
-      RESOURCES_NAME: "vault-prd-01"
+      RESOURCES_NAME: "vault-stag-01"
+      KV_ENV: production
     steps:
     - name: Deploy
       id: deployvault
