@@ -15,8 +15,7 @@ on:
         description: 'Manual tag'
 
 env:
-  staging_resources_suffix: "neolutinvault-stag-01"
-  production_resources_suffix: "neolutinvault-prod-01"
+  resources_suffix: "neolutin-vault-01"
 
 jobs:
   terraformPack:
@@ -51,6 +50,7 @@ jobs:
       - id: iac
         uses: ./actions/iac-vault
         with:
+          environment: staging
           resources-suffix: ${{ env.staging_resources_suffix }}
           terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
           azuretenant-id: ${{ secrets.AZURETENANT_ID }}
@@ -94,6 +94,7 @@ jobs:
       - id: iac
         uses: ./actions/iac-vault
         with:
+          environment: production
           resources-suffix: ${{ env.production_resources_suffix }}
           terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
           azuretenant-id: ${{ secrets.AZURETENANT_ID }}

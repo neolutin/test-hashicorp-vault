@@ -19,6 +19,9 @@ inputs:
   terraformclient-secret:
     description: 'Secret of the Azure App allowed to deploy in the subscription'
     required: true
+  environment:
+    description: 'Terraform workspace'
+    default: "dev"
 outputs:
   vault-vm-name:
     description: "Name (FQDN or IP) of the created VM"
@@ -48,12 +51,12 @@ runs:
         AZURESUSCRIPTION_ID:    ${{ inputs.azuresuscription-id }}
         TERRAFORMCLIENT_ID:     ${{ inputs.terraformclient-id }}
         TERRAFORMCLIENT_SECRET: ${{ inputs.terraformclient-secret }}
-        RESOURCES_NAME:         ${{ inputs.resources-suffix }}
       with:
         filename: terraform/provider.tf
     - name: Deploy
       run: |
         terraform init
+        terraform workspace select ${{ inputs.environment }}
         terraform plan -input=false -var 'suffix=${{ inputs.resources-suffix }}' -out='out.tfplan'
         terraform apply out.tfplan
       shell: bash

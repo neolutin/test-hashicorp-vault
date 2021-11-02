@@ -115,7 +115,7 @@ runs:
           vault policy write ${{ inputs.secrets-environment }}-policy policy.hcl
           vault write auth/userpass/users/simple password=${{ inputs.simple-user }} policies=${{ inputs.secrets-environment }}-policy
           vault secrets enable -path=${{ inputs.secrets-environment }} kv
-          echo ::set-output name=vaulttoken::$VAULT_TOKEN # TODO: Harden export
+          echo $INIT_VALS > vaultinit.json
     - name: Setup Vault kv
       uses: appleboy/ssh-action@v0.1.4
       with:

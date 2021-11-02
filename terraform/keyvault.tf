@@ -1,5 +1,5 @@
 resource "azurerm_key_vault" "main_kv" {
-  name                        = "kv-${var.suffix}"
+  name                        = "kv-${terraform.workspace}-${var.suffix}"
   location                    = azurerm_resource_group.main.location
   resource_group_name         = azurerm_resource_group.main.name
   enabled_for_disk_encryption = true

@@ -1,11 +1,11 @@
 resource "azurerm_resource_group" "main" {
-  name     = "resources-${var.suffix}"
+  name     = "resources-${terraform.workspace}-${var.suffix}"
   location = "westeurope"
   tags     = var.tags
 }
 
 resource "azurerm_availability_set" "availability" {
-  name                = "aset-${var.suffix}"
+  name                = "aset-${terraform.workspace}-${var.suffix}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   tags                = var.tags
@@ -13,7 +13,7 @@ resource "azurerm_availability_set" "availability" {
 
 module "vm1" {
   source              = "./virtual-machine"
-  suffix              = "vm1-${var.suffix}"
+  suffix              = "vm1-${terraform.workspace}-${var.suffix}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   availability_set_id = azurerm_availability_set.availability.id
