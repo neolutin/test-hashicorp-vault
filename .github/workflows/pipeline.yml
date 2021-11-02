@@ -15,8 +15,8 @@ on:
         description: 'Manual tag'
 
 env:
-  staging_resources_suffix: "vault-stag-01"
-  production_resources_suffix: "neolutin-vault-prod-01"
+  staging_resources_suffix: "neolutinvault-stag-01"
+  production_resources_suffix: "neolutinvault-prod-01"
 
 jobs:
   terraformPack:
