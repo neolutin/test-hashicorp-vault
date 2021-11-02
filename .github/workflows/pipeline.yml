@@ -89,6 +89,8 @@ jobs:
       vmip: ${{ steps.iac.outputs.vault-vm-name }}
       simpleuser: ${{ steps.iac.outputs.simple-user }}
     steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v2
       - id: iac
         uses: ./actions/iac-vault
         with:
@@ -106,6 +108,8 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v2
       - id: setup
         uses: ./actions/setup-vault
         with:
