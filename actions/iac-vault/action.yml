@@ -40,7 +40,7 @@ runs:
       with:
         terraform_version: 1.0
         terraform_wrapper: false
-    - name: Replace env vars in file
+    - name: Add Azure information in terraform provider
       uses: falnyr/replace-env-vars-action@v1.2.1
       env:
         TERRAFORMSTORAGE_KEY:   ${{ inputs.terraformstorage-key }}

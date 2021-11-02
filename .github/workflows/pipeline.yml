@@ -40,6 +40,7 @@ jobs:
 
   stagingInfra:
     needs: terraformPack
+    if: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     outputs:
       vmip: ${{ steps.iac.outputs.vault-vm-name }}
@@ -59,6 +60,7 @@ jobs:
 
   setupStagingVault:
     needs: stagingInfra
+    if: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this repo

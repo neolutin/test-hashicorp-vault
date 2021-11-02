@@ -15,7 +15,7 @@
 * Deployment of the vault configuration on this VM
 
 # Todo
-* Fix the auto-unseal from Azure
+* Make the CI Reentrant (actions after vault operator init)
 * Hardenning
   * Segregate app usage (only one is used)
   * Connect from github to Azure vault to get sensitive data
