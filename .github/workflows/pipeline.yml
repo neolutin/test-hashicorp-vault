@@ -1,0 +1,121 @@
+name: Deploy Hashicorp Vault
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+      tags:
+        description: 'Manual tag'
+
+env:
+  staging_resources_suffix: "vault-stag-01"
+  production_resources_suffix: "vault-prod-01"
+
+jobs:
+  terraformPack:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1.2.1
+      with:
+        terraform_version: 1.0
+    - name: Upload terraform Artifact
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: terraform
+        path: terraform
+    - name: Upload vault config
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: vault
+        path: vault
+
+  stagingInfra:
+    needs: terraformPack
+    if: ${{ github.ref != 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      vmip: ${{ steps.iac.outputs.vault-vm-name }}
+      simpleuser: ${{ steps.iac.outputs.simple-user }}
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v2
+      - id: iac
+        uses: ./actions/iac-vault
+        with:
+          resources-suffix: ${{ env.staging_resources_suffix }}
+          terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
+          azuretenant-id: ${{ secrets.AZURETENANT_ID }}
+          azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
+          terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
+          terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+
+  setupStagingVault:
+    needs: stagingInfra
+    if: ${{ github.ref != 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v2
+      - id: setup
+        uses: ./actions/setup-vault
+        with:
+          vault-vm-name: ${{ needs.stagingInfra.outputs.vmip }}
+          simple-user: ${{ needs.stagingInfra.outputs.simpleuser }}
+          kv-name: "kv-${{ env.staging_resources_suffix }}"
+          secrets-environment: staging
+          terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
+          azuretenant-id: ${{ secrets.AZURETENANT_ID }}
+          azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
+          terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
+          terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+          ssh-key: ${{ secrets.VM_SSH_KEY }}
+
+  prodInfra:
+    needs: terraformPack
+    environment:
+      name: production
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      vmip: ${{ steps.iac.outputs.vault-vm-name }}
+      simpleuser: ${{ steps.iac.outputs.simple-user }}
+    steps:
+      - id: iac
+        uses: ./actions/iac-vault
+        with:
+          resources-suffix: ${{ env.production_resources_suffix }}
+          terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
+          azuretenant-id: ${{ secrets.AZURETENANT_ID }}
+          azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
+          terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
+          terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+
+  setupprodVault:
+    needs: prodInfra
+    environment:
+      name: production
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: setup
+        uses: ./actions/setup-vault
+        with:
+          kv-name: "kv-${{ env.production_resources_suffix }}"
+          vault-vm-name: ${{ needs.prodInfra.outputs.vmip }}
+          simple-user: ${{ needs.prodInfra.outputs.simpleuser }}
+          secrets-environment: production
+          terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
+          azuretenant-id: ${{ secrets.AZURETENANT_ID }}
+          azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
+          terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
+          terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+          ssh-key: ${{ secrets.VM_SSH_KEY }}

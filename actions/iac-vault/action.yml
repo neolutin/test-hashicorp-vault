@@ -1,0 +1,69 @@
+name: 'Deploy Vault Infrastructure'
+description: 'Common actions to deploy an Hashicorp vault on an environment'
+inputs:
+  resources-suffix:
+    description: 'Suffix to apply to the resource names (i.e. env-num)'
+    required: true
+  terraformstorage-key:
+    description: 'Key to access storage of tfstate'
+    required: true
+  azuretenant-id:
+    description: 'Azure tenant'
+    required: true
+  azuresuscription-id:
+    description: 'Azure subscription where the infra will be deployed'
+    required: true
+  terraformclient-id:
+    description: 'Client Id of the Azure App allowed to deploy in the subscription'
+    required: true
+  terraformclient-secret:
+    description: 'Secret of the Azure App allowed to deploy in the subscription'
+    required: true
+outputs:
+  vault-vm-name:
+    description: "Name (FQDN or IP) of the created VM"
+    value: ${{ steps.getinfravalues.outputs.vmip }}
+  simple-user:
+    description: "Generated password for the created service user"
+    value: ${{ steps.getinfravalues.outputs.simpleuser }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download terraform Artifact
+      uses: actions/download-artifact@v2.0.10
+      with:
+        name: terraform
+        path: terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1.2.1
+      with:
+        terraform_version: 1.0
+        terraform_wrapper: false
+    - name: Add Azure information in terraform provider
+      uses: falnyr/replace-env-vars-action@v1.2.1
+      env:
+        TERRAFORMSTORAGE_KEY:   ${{ inputs.terraformstorage-key }}
+        AZURETENANT_ID:         ${{ inputs.azuretenant-id }}
+        AZURESUSCRIPTION_ID:    ${{ inputs.azuresuscription-id }}
+        TERRAFORMCLIENT_ID:     ${{ inputs.terraformclient-id }}
+        TERRAFORMCLIENT_SECRET: ${{ inputs.terraformclient-secret }}
+        RESOURCES_NAME:         ${{ inputs.resources-suffix }}
+      with:
+        filename: terraform/provider.tf
+    - name: Deploy
+      run: |
+        terraform init
+        terraform plan -input=false -var 'suffix=${{ inputs.resources-suffix }}' -out='out.tfplan'
+        terraform apply out.tfplan
+      shell: bash
+      working-directory: terraform
+    - name: 'Get Infra Outputs'
+      id: getinfravalues
+      run: |
+        vmip=$(terraform output -json -no-color vm1_ip_addr | jq -r .)
+        simpleuser=$(terraform output -json -no-color simple_password | jq -r .value)
+        echo ::set-output name=vmip::$vmip
+        echo ::set-output name=simpleuser::$simpleuser
+      shell: bash
+      working-directory: terraform
