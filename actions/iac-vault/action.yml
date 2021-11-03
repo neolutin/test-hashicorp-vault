@@ -19,6 +19,9 @@ inputs:
   terraformclient-secret:
     description: 'Secret of the Azure App allowed to deploy in the subscription'
     required: true
+  github-token:
+    description: 'Token to contribute to PR'
+    required: true
   environment:
     description: 'Terraform workspace'
     default: "dev"
@@ -43,28 +46,72 @@ runs:
       with:
         terraform_version: 1.0
         terraform_wrapper: false
-    - name: Add Azure information in terraform provider
-      uses: falnyr/replace-env-vars-action@v1.2.1
-      env:
-        TERRAFORMSTORAGE_KEY:   ${{ inputs.terraformstorage-key }}
-        AZURETENANT_ID:         ${{ inputs.azuretenant-id }}
-        AZURESUSCRIPTION_ID:    ${{ inputs.azuresuscription-id }}
-        TERRAFORMCLIENT_ID:     ${{ inputs.terraformclient-id }}
-        TERRAFORMCLIENT_SECRET: ${{ inputs.terraformclient-secret }}
-      with:
-        filename: terraform/provider.tf
-    - name: Deploy
+    - name: Terraform Plan
+      id: plan
+      # if: github.event_name == 'pull_request' # Not yet available for composite actions
       run: |
-        terraform init
-        terraform workspace select ${{ inputs.environment }}
-        terraform plan -input=false -var 'suffix=${{ inputs.resources-suffix }}' -out='out.tfplan'
-        terraform apply out.tfplan
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          terraform init
+          terraform workspace select ${{ inputs.environment }}
+          terraform plan -no-color -input=false -var 'suffix=${{ inputs.resources-suffix }}'
+        fi
+        exit 0
+      # continue-on-error: true # Not yet available for composite actions
+      shell: bash
+      working-directory: terraform
+    - name: Update Pull Request
+      uses: actions/github-script@0.9.0
+      # if: github.event_name == 'pull_request' # Not yet available for composite actions
+      env:
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          if (github.event_name !== 'pull_request') {
+            return // Only available for pull requests
+          }
+
+          const output = #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+    - name: Terraform Plan Status
+      # if: steps.plan.outcome == 'failure' # Not yet available for composite actions
+      run: |
+        if [[ "${{ steps.plan.outcome }}" == "failure" ]]; then
+          exit 1
+        fi
+        exit 0
+      shell: bash
+    - name: Terraform Apply
+      #if: (inputs.environment == 'prod' && github.ref == 'refs/heads/main' && github.event_name == 'push') || (inputs.environment != 'prod' && github.ref != 'refs/heads/main')
+      run: |
+        if [[ ("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main' && "${{github.event_name}}" == "push") || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main') ]]; then
+          terraform workspace select ${{ inputs.environment }}
+          terraform apply -auto-approve -input=false
+        fi
+        exit 0
       shell: bash
       working-directory: terraform
     - name: 'Get Infra Outputs'
       id: getinfravalues
       run: |
         vmip=$(terraform output -json -no-color vm1_ip_addr | jq -r .)
+        terraform workspace select ${{ inputs.environment }}
         simpleuser=$(terraform output -json -no-color simple_password | jq -r .value)
         echo ::set-output name=vmip::$vmip
         echo ::set-output name=simpleuser::$simpleuser

@@ -15,9 +15,9 @@
 * Deployment of the vault configuration on this VM
 
 # Todo
-* Use ansible playbook for configuration (setup-vault)
-* Use terraform workspace
 * Separate terraform plan & apply
+* Use terraform workspace
+* Use ansible playbook for configuration (setup-vault)
 * Hardenning
   * Segregate app usage (only one is used)
   * Connect from github to Azure vault to get sensitive data

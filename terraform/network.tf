@@ -1,5 +1,5 @@
 resource "azurerm_virtual_network" "main" {
-  name                = "network-${terraform.workspace}-${var.suffix}"
+  name                = "vnet-${var.suffix}"
   address_space       = ["10.0.0.0/16"]
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
@@ -14,7 +14,7 @@ resource "azurerm_subnet" "internal" {
 }
 
 resource "azurerm_network_security_group" "vault" {
-  name                = "nsg-${terraform.workspace}-${var.suffix}"
+  name                = "nsg-${var.suffix}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   security_rule {
