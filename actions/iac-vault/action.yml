@@ -4,24 +4,6 @@ inputs:
   resources-suffix:
     description: 'Suffix to apply to the resource names (i.e. env-num)'
     required: true
-  terraformstorage-key:
-    description: 'Key to access storage of tfstate'
-    required: true
-  azuretenant-id:
-    description: 'Azure tenant'
-    required: true
-  azuresuscription-id:
-    description: 'Azure subscription where the infra will be deployed'
-    required: true
-  terraformclient-id:
-    description: 'Client Id of the Azure App allowed to deploy in the subscription'
-    required: true
-  terraformclient-secret:
-    description: 'Secret of the Azure App allowed to deploy in the subscription'
-    required: true
-  github-token:
-    description: 'Token to contribute to PR'
-    required: true
   environment:
     description: 'Terraform workspace'
     default: "dev"
@@ -65,18 +47,17 @@ runs:
       env:
         PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
       with:
-        github-token: ${{ inputs.github-token }}
         script: |
           if (github.event_name !== 'pull_request') {
             return // Only available for pull requests
           }
 
-          const output = #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          const output = `#### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
 
           <details><summary>Show Plan</summary>
 
           \`\`\`\n
-          ${process.env.PLAN}
+          terraform\n${{ steps.plan.outputs.stdout }}
           \`\`\`
 
           </details>
@@ -98,9 +79,9 @@ runs:
         exit 0
       shell: bash
     - name: Terraform Apply
-      #if: (inputs.environment == 'prod' && github.ref == 'refs/heads/main' && github.event_name == 'push') || (inputs.environment != 'prod' && github.ref != 'refs/heads/main')
+      #if: ((inputs.environment == 'prod' && github.ref == 'refs/heads/main') || (inputs.environment != 'prod' && github.ref != 'refs/heads/main')) && github.event_name == 'push'
       run: |
-        if [[ ("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main' && "${{github.event_name}}" == "push") || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main') ]]; then
+        if [[ (("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main') || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main')) && "${{github.event_name}}" == "push" ]]; then
           terraform workspace select ${{ inputs.environment }}
           terraform apply -auto-approve -input=false
         fi
@@ -109,11 +90,15 @@ runs:
       working-directory: terraform
     - name: 'Get Infra Outputs'
       id: getinfravalues
+      # if: github.event_name == 'push' # Not yet available for composite actions
       run: |
-        vmip=$(terraform output -json -no-color vm1_ip_addr | jq -r .)
-        terraform workspace select ${{ inputs.environment }}
-        simpleuser=$(terraform output -json -no-color simple_password | jq -r .value)
-        echo ::set-output name=vmip::$vmip
-        echo ::set-output name=simpleuser::$simpleuser
+        if [[ "${{github.event_name}}" == "push" ]]; then
+          terraform workspace select ${{ inputs.environment }}
+          vmip=$(terraform output -json -no-color vm1_ip_addr | jq -r .)
+          simpleuser=$(terraform output -json -no-color simple_password | jq -r .value)
+          echo ::set-output name=vmip::$vmip
+          echo ::set-output name=simpleuser::$simpleuser
+        fi
+        exit 0
       shell: bash
       working-directory: terraform

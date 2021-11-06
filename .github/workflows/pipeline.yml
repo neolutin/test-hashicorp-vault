@@ -83,9 +83,9 @@ jobs:
 
   stagingInfra:
     needs: terraformPack
+    if: ${{ github.ref != 'refs/heads/main' }}
     env:
       environment: staging
-    if: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     outputs:
       vmip: ${{ steps.iac.outputs.vault-vm-name }}
@@ -93,75 +93,19 @@ jobs:
     steps:
     - name: Checkout this repo
       uses: actions/checkout@v2
-    - name: Download terraform Artifact
-      uses: actions/download-artifact@v2.0.10
-      with:
-        name: terraform
-        path: terraform
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v1.2.1
-      with:
-        terraform_version: 1.0
-        terraform_wrapper: false
-    - name: Terraform Plan
-      id: plan
-      if: github.event_name == 'pull_request'
-      run: |
-        terraform init
-        terraform workspace select ${{ env.environment }}
-        echo ::set-output name=logs::$(terraform plan -no-color -input=false -var 'suffix=${{ env.resources_suffix }}')
-      continue-on-error: true
-      shell: bash
-      working-directory: terraform
-    - name: Update Pull Request
-      uses: actions/github-script@0.9.0
-      if: github.event_name == 'pull_request'
-      with:
-        script: |
-          const output = #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-
-          <details><summary>Show Plan</summary>
-
-          \`\`\`\n
-          terraform\n${{ steps.plan.outputs.logs }}
-          \`\`\`
-
-          </details>
-
-          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-
-          github.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: output
-          })
-    - name: Terraform Plan Status
-      if: steps.plan.outcome == 'failure'
-      run: exit 1
-      shell: bash
-    - name: Terraform Apply
-      if: ((env.environment == 'prod' && github.ref == 'refs/heads/main') || (env.environment != 'prod' && github.ref != 'refs/heads/main')) && github.event_name == 'push'
-      run: |
-        terraform workspace select ${{ env.environment }}
-        terraform apply -auto-approve -input=false
-      shell: bash
-      working-directory: terraform
-    - name: 'Get Infra Outputs'
-      id: iac
-      if: github.event_name == 'push'
-      run: |
-        terraform workspace select ${{ env.environment }}
-        vmip=$(terraform output -json -no-color vm1_ip_addr | jq -r .)
-        simpleuser=$(terraform output -json -no-color simple_password | jq -r .value)
-        echo ::set-output name=vmip::$vmip
-        echo ::set-output name=simpleuser::$simpleuser
-      shell: bash
-      working-directory: terraform
+    - id: iac
+        uses: ./actions/iac-vault
+        with:
+          resources-suffix: ${{ env.staging_resources_suffix }}
+          terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
+          azuretenant-id: ${{ secrets.AZURETENANT_ID }}
+          azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
+          terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
+          terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
 
   setupStagingVault:
     needs: stagingInfra
-    if: ${{ github.ref != 'refs/heads/main' }}
+    if: ${{ github.ref != 'refs/heads/main' }} && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this repo
@@ -169,8 +113,6 @@ jobs:
       - id: setup
         uses: ./actions/setup-vault
         with:
-          vault-vm-name: ${{ needs.stagingInfra.outputs.vmip }}
-          simple-user: ${{ needs.stagingInfra.outputs.simpleuser }}
           kv-name: "kv-${{ env.resources_suffix }}"
           secrets-environment: staging
           terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
@@ -178,7 +120,6 @@ jobs:
           azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
           terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
-          ssh-key: ${{ secrets.VM_SSH_KEY }}
 
   prodInfra:
     needs: terraformPack
@@ -216,12 +157,9 @@ jobs:
         uses: ./actions/setup-vault
         with:
           kv-name: "kv-${{ env.resources_suffix }}"
-          vault-vm-name: ${{ needs.prodInfra.outputs.vmip }}
-          simple-user: ${{ needs.prodInfra.outputs.simpleuser }}
           secrets-environment: production
           terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
           azuretenant-id: ${{ secrets.AZURETENANT_ID }}
           azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
           terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
-          ssh-key: ${{ secrets.VM_SSH_KEY }}
