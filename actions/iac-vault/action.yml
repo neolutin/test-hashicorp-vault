@@ -19,7 +19,7 @@ inputs:
 outputs:
   vault-vm-name:
     description: "Name (FQDN or IP) of the created VM"
-    value: ${{ steps.getinfravalues.outputs.vmfqdn }}
+    value: ${{ steps.apply.outputs.vmfqdn }}
 
 runs:
   using: "composite"
@@ -99,25 +99,20 @@ runs:
         exit 0
       shell: bash
     - name: Terraform Apply
-      #if: ((inputs.environment == 'prod' && github.ref == 'refs/heads/main') || (inputs.environment != 'prod' && github.ref != 'refs/heads/main')) && github.event_name == 'push'
+      #if: ((inputs.environment == 'prod' && github.ref == 'refs/heads/main' && github.event_name == 'push') || (inputs.environment != 'prod' && github.ref != 'refs/heads/main' && github.event_name == 'pull_request'))
+      id: apply
+      env:
+        ARM_TENANT_ID:     ${{ inputs.azuretenant-id }}
+        ARM_CLIENT_ID:     ${{ inputs.terraformclient-id }}
+        ARM_CLIENT_SECRET: ${{ inputs.terraformclient-secret }}
       run: |
         if [[ (
                 ("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main' && "${{github.event_name}}" == "push") \
-             || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main' && "${{github.event_name}}" == "workflow_dispatch")) \
+             || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main' && "${{github.event_name}}" != "pull_request")) \
                ]]; then
           terraform init
           terraform workspace select ${{ inputs.environment }}
           terraform apply -auto-approve -input=false -var 'suffix=${{ inputs.resources-suffix }}'
-        fi
-        exit 0
-      shell: bash
-      working-directory: terraform
-    - name: 'Get Infra Outputs'
-      id: getinfravalues
-      # if: github.event_name == 'push' # Not yet available for composite actions
-      run: |
-        if [[ "${{github.event_name}}" == "push" ]]; then
-          terraform workspace select ${{ inputs.environment }}
           vmfqdn=$(terraform output -json -no-color vm1_fqdn | jq -r .)
           echo ::set-output name=vmfqdn::$vmfqdn
         fi
