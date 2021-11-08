@@ -1,4 +1,5 @@
-# test-hashicorp-vault
+# Hashicorp Vault
+CI/Automation project to create the infrastructure and setup an Hashicorp Vault
 
 # Manual Setup
 * Create Terraform Storage Account (once for all terraform projects)
@@ -15,8 +16,6 @@
 * Deployment of the vault configuration on this VM
 
 # Todo
-* Separate terraform plan & apply
-* Use terraform workspace
 * Use ansible playbook for configuration (setup-vault)
 * Hardenning
   * Segregate app usage (only one is used)
