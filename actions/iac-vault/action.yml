@@ -7,6 +7,15 @@ inputs:
   environment:
     description: 'Terraform workspace'
     default: "dev"
+  azuretenant-id:
+    description: 'Azure tenant'
+    required: true
+  terraformclient-id:
+    description: 'Client Id of the Azure App allowed to deploy in the subscription'
+    required: true
+  terraformclient-secret:
+    description: 'Secret of the Azure App allowed to deploy in the subscription'
+    required: true
 outputs:
   vault-vm-name:
     description: "Name (FQDN or IP) of the created VM"
@@ -27,12 +36,24 @@ runs:
         terraform_wrapper: false
     - name: Terraform Plan
       id: plan
+      env:
+        ARM_TENANT_ID:     ${{ inputs.azuretenant-id }}
+        ARM_CLIENT_ID:     ${{ inputs.terraformclient-id }}
+        ARM_CLIENT_SECRET: ${{ inputs.terraformclient-secret }}
       # if: github.event_name == 'pull_request' # Not yet available for composite actions
       run: |
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-          terraform init
-          terraform workspace select ${{ inputs.environment }}
-          terraform plan -no-color -input=false -var 'suffix=${{ inputs.resources-suffix }}'
+          echo ::set-output name=outcome::success
+          terraform init \
+            && terraform workspace select ${{ inputs.environment }} \
+            && terraform plan -no-color -input=false -var 'suffix=${{ inputs.resources-suffix }}' > plan.out \
+            || echo ::set-output name=outcome::failure
+          # Workaround on composite actions to keep multilines
+          PLAN_OUT=$(cat plan.out)
+          PLAN_OUT="${PLAN_OUT//'%'/'%25'}"
+          PLAN_OUT="${PLAN_OUT//$'\n'/'%0A'}"
+          PLAN_OUT="${PLAN_OUT//$'\r'/'%0D'}"
+          echo "::set-output name=stdout::$PLAN_OUT"
         fi
         exit 0
       # continue-on-error: true # Not yet available for composite actions
@@ -42,19 +63,21 @@ runs:
       uses: actions/github-script@0.9.0
       # if: github.event_name == 'pull_request' # Not yet available for composite actions
       env:
+        # PLAN: "terraform\n${{ steps.plan.stdout }}" # to be tested outside composite actions
         PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
       with:
         script: |
-          if (github.event_name !== 'pull_request') {
+          if ('${{ github.event_name }}' !== 'pull_request') {
             return // Only available for pull requests
           }
 
-          const output = `#### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          const {PLAN} = process.env
+          const output = `#### Terraform Plan 📖\`${{ steps.plan.outputs.outcome }}\`
 
           <details><summary>Show Plan</summary>
 
           \`\`\`\n
-          terraform\n${{ steps.plan.outputs.stdout }}
+          ${PLAN}
           \`\`\`
 
           </details>
@@ -70,7 +93,7 @@ runs:
     - name: Terraform Plan Status
       # if: steps.plan.outcome == 'failure' # Not yet available for composite actions
       run: |
-        if [[ "${{ steps.plan.outcome }}" == "failure" ]]; then
+        if [[ "${{ steps.plan.outputs.outcome }}" == "failure" ]]; then
           exit 1
         fi
         exit 0
@@ -80,7 +103,7 @@ runs:
       run: |
         if [[ (("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main') || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main')) && "${{github.event_name}}" == "push" ]]; then
           terraform workspace select ${{ inputs.environment }}
-          terraform apply -auto-approve -input=false
+          terraform apply -auto-approve -input=false -var 'suffix=${{ inputs.resources-suffix }}'
         fi
         exit 0
       shell: bash

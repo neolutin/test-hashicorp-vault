@@ -1,3 +1,7 @@
+data "azuread_application" "ansible" {
+  application_id = "34732622-f4ce-4a42-bc93-01d639207495"
+}
+
 resource "azurerm_key_vault" "main_kv" {
   name                        = "kv-${var.suffix}"
   location                    = azurerm_resource_group.main.location
@@ -10,43 +14,49 @@ resource "azurerm_key_vault" "main_kv" {
   sku_name = "standard"
   tags     = var.tags
   
+  access_policy {
+    tenant_id    = data.azurerm_client_config.current.tenant_id
+    object_id    = data.azurerm_client_config.current.object_id
+
+    secret_permissions = [
+      "Get",
+      "Set",
+      "Delete",
+      "Purge"
+    ]
+    key_permissions    = [
+      "Create",
+      "Get",
+      "Purge",
+      "Recover",
+      "WrapKey",
+      "UnwrapKey",
+    ]
+    certificate_permissions = []
+    storage_permissions     = []
+  }
+
+  access_policy {
+    tenant_id    = data.azurerm_client_config.current.tenant_id
+    object_id    = data.azuread_application.ansible.object_id
+
+    secret_permissions = [
+      "Get"
+    ]
+    key_permissions    = []
+    certificate_permissions = []
+    storage_permissions     = []
+  }
   network_acls {
     default_action = "Allow"
     bypass         = "AzureServices"
   }
 }
 
-resource "azurerm_key_vault_access_policy" "current_user_policy" {
-  key_vault_id = azurerm_key_vault.main_kv.id
-  tenant_id    = data.azurerm_client_config.current.tenant_id
-  object_id    = data.azurerm_client_config.current.object_id
-
-  secret_permissions = [
-    "Get", "Set", "Delete", "Purge"
-  ]
-  key_permissions    = [
-    "create",
-    "get",
-    "purge",
-    "recover",
-    "wrapKey",
-    "unwrapKey",
-  ]
-  certificate_permissions = []
-  storage_permissions     = []
-}
-
-resource "azurerm_key_vault_access_policy" "ansible_user_policy" {
-  key_vault_id = azurerm_key_vault.main_kv.id
-  tenant_id    = data.azurerm_client_config.ansible.tenant_id
-  object_id    = data.azurerm_client_config.ansible.object_id
-
-  secret_permissions = [
-    "Get"
-  ]
-  key_permissions    = []
-  certificate_permissions = []
-  storage_permissions     = []
+resource "azurerm_role_assignment" "ansible" {
+ scope = azurerm_key_vault.main_kv.id
+ role_definition_name = "Reader"
+ principal_id = data.azuread_application.ansible.application_id
 }
 
 resource "random_password" "password" {

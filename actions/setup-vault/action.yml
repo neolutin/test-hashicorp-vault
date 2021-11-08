@@ -1,4 +1,4 @@
-name: 'Setup Vault'
+name: 'Configure Vault Files'
 description: 'Common actions to deploy an Hashicorp vault on an environment'
 inputs:
   simple-user: 

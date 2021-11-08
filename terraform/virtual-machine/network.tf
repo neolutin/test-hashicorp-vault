@@ -42,6 +42,6 @@ resource "azurerm_network_interface_security_group_association" "main" {
   network_security_group_id = var.security_group_id
 }
 
-output "nicdns" {
-  value = azurerm_network_interface.main.internal_domain_name_suffix
+output "fqdn" {
+  value = azurerm_public_ip.pip.fqdn
 }

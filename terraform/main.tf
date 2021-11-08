@@ -23,5 +23,5 @@ module "vm1" {
 }
 
 output "vm1_fqdn" {
-  value ="vm1-${var.suffix}${module.vm1.nicdns}"
+  value ="${module.vm1.fqdn}"
 }
