@@ -28,6 +28,7 @@ resource "azurerm_key_vault" "main_kv" {
       "Create",
       "Get",
       "Purge",
+      "Delete",
       "Recover",
       "WrapKey",
       "UnwrapKey",
