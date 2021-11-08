@@ -45,7 +45,7 @@ runs:
         path: vault
     - name: Setup Ansible Hosts
       run: |
-        echo ${{ host-name }} >> hosts
+        echo ${{ inputs.host-name }} >> hosts
       shell: bash
       working-directory: vault
     - name: Add azure information for vault auto-unseal

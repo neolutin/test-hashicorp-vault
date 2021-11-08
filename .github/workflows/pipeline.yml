@@ -85,7 +85,8 @@ jobs:
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
-      - id: iac
+      - name: Infrastructure deployment
+        id: iac
         uses: ./actions/iac-vault
         with:
           resources-suffix: ${{ env.resources_suffix }}
@@ -102,8 +103,8 @@ jobs:
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
-      - id: setup
-        uses: ./actions/setup-vault
+      - name: File configuration for Vault
+        uses: ./actions/vault-configuration
         with:
           kv-name: "kv-${{ env.resources_suffix }}"
           secrets-environment: staging
@@ -119,15 +120,14 @@ jobs:
   prodInfra:
     name: "Deploy Production Infrastructure"
     needs: terraformPack
-    environment:
-      name: production
     runs-on: ubuntu-latest
     outputs:
       vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
-      - id: iac
+      - name: Infrastructure deployment
+        id: iac
         uses: ./actions/iac-vault
         with:
           environment: prod
@@ -146,8 +146,8 @@ jobs:
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
-      - id: setup
-        uses: ./actions/setup-vault
+      - name: File configuration for Vault
+        uses: ./actions/vault-configuration
         with:
           kv-name: "kv-${{ env.resources_suffix }}"
           secrets-environment: production
