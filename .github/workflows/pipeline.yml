@@ -104,7 +104,7 @@ jobs:
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
 
   prepareStagingConf:
-    if: ${{ github.ref != 'refs/heads/main' }}
+    if: ${{ github.ref != 'refs/heads/main' && github.event_name != 'pull_request' }}
     name: "Prepare Staging Vault Configuration"
     needs: stagingInfra
     env:
@@ -130,6 +130,7 @@ jobs:
 
   prodInfra:
     name: "Deploy Production Infrastructure"
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'pull_request' }}
     needs: terraformPack
     runs-on: ubuntu-latest
     outputs:
@@ -148,7 +149,7 @@ jobs:
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
 
   prepareProdConf:
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
     name: "Prepare Production Vault Configuration"
     needs: prodInfra
     environment:

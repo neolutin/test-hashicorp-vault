@@ -100,10 +100,14 @@ runs:
       shell: bash
     - name: Terraform Apply
       #if: ((inputs.environment == 'prod' && github.ref == 'refs/heads/main') || (inputs.environment != 'prod' && github.ref != 'refs/heads/main')) && github.event_name == 'push'
+      env:
+        ARM_TENANT_ID:     ${{ inputs.azuretenant-id }}
+        ARM_CLIENT_ID:     ${{ inputs.terraformclient-id }}
+        ARM_CLIENT_SECRET: ${{ inputs.terraformclient-secret }}
       run: |
         if [[ (
                 ("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main' && "${{github.event_name}}" == "push") \
-             || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main' && "${{github.event_name}}" == "workflow_dispatch")) \
+             || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main' && "${{github.event_name}}" != "pull_request")) \
                ]]; then
           terraform init
           terraform workspace select ${{ inputs.environment }}
