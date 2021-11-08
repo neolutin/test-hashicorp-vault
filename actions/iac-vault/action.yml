@@ -74,7 +74,7 @@ runs:
           const {PLAN} = process.env
           const output = `#### Terraform Plan 📖\`${{ steps.plan.outputs.outcome }}\`
 
-          <details><summary>Show Plan</summary>
+          <details><summary>Show ${{ inputs.environment }} Plan</summary>
 
           \`\`\`\n
           ${PLAN}
@@ -101,7 +101,10 @@ runs:
     - name: Terraform Apply
       #if: ((inputs.environment == 'prod' && github.ref == 'refs/heads/main') || (inputs.environment != 'prod' && github.ref != 'refs/heads/main')) && github.event_name == 'push'
       run: |
-        if [[ (("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main') || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main')) && "${{github.event_name}}" == "push" ]]; then
+        if [[ (("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main') \
+                || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main')) \
+              && "${{github.event_name}}" == "push" ]]; then
+          terraform init
           terraform workspace select ${{ inputs.environment }}
           terraform apply -auto-approve -input=false -var 'suffix=${{ inputs.resources-suffix }}'
         fi

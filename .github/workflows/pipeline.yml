@@ -2,9 +2,17 @@ name: Deploy Hashicorp Vault
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+      tags:
+        description: 'Manual tag'
 
 env:
   resources_suffix: "neolutin-01"
