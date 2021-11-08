@@ -16,7 +16,7 @@ resource "azurerm_key_vault" "main_kv" {
   }
 }
 
-resource "azurerm_key_vault_access_policy" "main_kv_open_policy" {
+resource "azurerm_key_vault_access_policy" "current_user_policy" {
   key_vault_id = azurerm_key_vault.main_kv.id
   tenant_id    = data.azurerm_client_config.current.tenant_id
   object_id    = data.azurerm_client_config.current.object_id
@@ -32,6 +32,19 @@ resource "azurerm_key_vault_access_policy" "main_kv_open_policy" {
     "wrapKey",
     "unwrapKey",
   ]
+  certificate_permissions = []
+  storage_permissions     = []
+}
+
+resource "azurerm_key_vault_access_policy" "ansible_user_policy" {
+  key_vault_id = azurerm_key_vault.main_kv.id
+  tenant_id    = data.azurerm_client_config.ansible.tenant_id
+  object_id    = data.azurerm_client_config.ansible.object_id
+
+  secret_permissions = [
+    "Get"
+  ]
+  key_permissions    = []
   certificate_permissions = []
   storage_permissions     = []
 }
@@ -66,9 +79,4 @@ resource "azurerm_key_vault_secret" "simple_user_password" {
   name         = "simplepassword"
   value        = random_password.password.result
   key_vault_id = azurerm_key_vault.main_kv.id
-}
-
-output "simple_password" {
-  sensitive = true
-  value = azurerm_key_vault_secret.simple_user_password
 }

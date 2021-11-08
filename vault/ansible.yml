@@ -1,0 +1,105 @@
+- hosts: vaultservers
+  # gather_facts: false
+  become: yes
+  collections:
+    - azure.azcollection
+  vars:
+    system_user: vault
+    system_group: vault
+    vault_username: simple
+    first_kv: 'notS0S33cret!'
+    tenant_id: __AZURETENANT_ID__
+    client_id: __ANSIBLE_CLIENT_ID__
+    client_secret: __ANSIBLE_CLIENT_SECRET__
+    secrets_environment: __ENVIRONMENT__
+    resource_group: __KV_RESOURCE_GROUP__
+    vault_name: __KV_NAME__
+
+ tasks:
+  - name: Setup Vault Address
+    set_fact: vault_addr="http://{{ ansible_fqdn }}:8200"
+
+  - name: Get Key Vault by name
+    azure_rm_keyvault_info:
+      resource_group: "{{ resource_group }}"
+      name: "{{ vault_name }}"
+    register: keyvault
+
+  - name: set KeyVault uri fact
+    set_fact: keyvaulturi="{{ keyvault['keyvaults'][0]['vault_uri'] }}"
+
+  - name: Get latest version of vault service user
+    azure_rm_keyvaultsecret_info:
+      vault_uri: "{{ keyvaulturi }}"
+      name: "simplepassword"
+    register: kvSecret
+
+  - name: Set secret fact
+    set_fact: userpass="{{ kvSecret['secrets'][0]['secret'] }}"
+
+  - name: Copy Vault config file
+    copy:
+      src: config.hcl
+      dest: /etc/vault.d/vault.hcl
+      owner: "{{ system_user }}"
+      group: "{{ system_group }}"
+      mode: u=rw,g=r,o=r
+
+  - name: Copy Vault service file
+    copy:
+      src: vault.service
+      dest: /etc/systemd/system/vault.service
+      owner: "{{ system_user }}"
+      group: "{{ system_group }}"
+      mode: u=rw,g=r,o=r
+
+  - name: Change file ownership, group and permissions
+    file:
+      path: /vault/data
+      state: directory
+      owner: "{{ system_user }}"
+      group: "{{ system_group }}"
+      mode: u=rw,g=r,o=r
+
+  - name: Make sure vault service is running
+    systemd:
+      state: started
+      enabled: yes
+      masked: no
+      name: vault
+
+  - name: Initialize Vault
+    shell: |
+      vault operator init -format=json > init.json
+      jq -r .root_token < init.json
+    creates: init.json
+    register: vault_token
+    environment:  
+      VAULT_ADDR: "{{ vault_addr }}"
+      VAULT_SKIP_VERIFY: 'true'
+
+  - name: Create an Azure KeyVault Secret
+    azure_rm_keyvaultsecret:
+      secret_name: vaultRootToken
+      secret_value: "{{ vault_token }}"
+      keyvault_uri: "{{ keyvaulturi }}"
+
+  - name: Setup Vault
+    shell: |
+      vault login -no-print
+      vault auth enable userpass
+      vault policy write {{ secrets_environment }}-policy policy.hcl
+      vault write auth/userpass/users/{{ vault_username }} password={{ userpass }} policies={{ secrets_environment }}-policy
+      vault secrets enable -path={{ secrets_environment }} kv
+    environment:  
+      VAULT_ADDR: "{{ vault_addr }}"
+      VAULT_SKIP_VERIFY: 'true'
+      VAULT_TOKEN: "{{ vault_token }}"
+
+  - name: Create First KV
+    shell: |
+      vault login -no-print -method=userpass username=simple password={{ userpass }}
+      vault kv put {{ secrets_environment }}/my-secret value={{ first_kv }}
+    environment:  
+      VAULT_ADDR: "{{ vault_addr }}"
+      VAULT_SKIP_VERIFY: 'true'

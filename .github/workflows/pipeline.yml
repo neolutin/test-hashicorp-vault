@@ -88,20 +88,19 @@ jobs:
       environment: staging
     runs-on: ubuntu-latest
     outputs:
-      vmip: ${{ steps.iac.outputs.vault-vm-name }}
-      simpleuser: ${{ steps.iac.outputs.simple-user }}
+      vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
     steps:
     - name: Checkout this repo
       uses: actions/checkout@v2
     - id: iac
-        uses: ./actions/iac-vault
-        with:
-          resources-suffix: ${{ env.staging_resources_suffix }}
-          terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
-          azuretenant-id: ${{ secrets.AZURETENANT_ID }}
-          azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
-          terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
-          terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+      uses: ./actions/iac-vault
+      with:
+        resources-suffix: ${{ env.resources_suffix }}
+        terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
+        azuretenant-id: ${{ secrets.AZURETENANT_ID }}
+        azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
+        terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
+        terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
 
   setupStagingVault:
     needs: stagingInfra
@@ -120,6 +119,9 @@ jobs:
           azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
           terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+          ansible-client-id: ${{ secrets.ANSIBLE_CLIENT_ID }}
+          ansible-client-secret: ${{ secrets.ANSIBLE_CLIENT_SECRET }}
+          vault-vm-name: ${{ needs.stagingInfra.outputs.vault-vm-name }}
 
   prodInfra:
     needs: terraformPack
@@ -128,8 +130,7 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     outputs:
-      vmip: ${{ steps.iac.outputs.vault-vm-name }}
-      simpleuser: ${{ steps.iac.outputs.simple-user }}
+      vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
@@ -148,7 +149,7 @@ jobs:
     needs: prodInfra
     environment:
       name: production
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.ref == 'refs/heads/main' }} && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this repo
@@ -163,3 +164,6 @@ jobs:
           azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
           terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+          ansible-client-id: ${{ secrets.ANSIBLE_CLIENT_ID }}
+          ansible-client-secret: ${{ secrets.ANSIBLE_CLIENT_SECRET }}
+          vault-vm-name: ${{ needs.stagingInfra.outputs.vault-vm-name }}

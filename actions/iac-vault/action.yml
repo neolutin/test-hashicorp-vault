@@ -10,10 +10,7 @@ inputs:
 outputs:
   vault-vm-name:
     description: "Name (FQDN or IP) of the created VM"
-    value: ${{ steps.getinfravalues.outputs.vmip }}
-  simple-user:
-    description: "Generated password for the created service user"
-    value: ${{ steps.getinfravalues.outputs.simpleuser }}
+    value: ${{ steps.getinfravalues.outputs.vmfqdn }}
 
 runs:
   using: "composite"
@@ -94,10 +91,8 @@ runs:
       run: |
         if [[ "${{github.event_name}}" == "push" ]]; then
           terraform workspace select ${{ inputs.environment }}
-          vmip=$(terraform output -json -no-color vm1_ip_addr | jq -r .)
-          simpleuser=$(terraform output -json -no-color simple_password | jq -r .value)
-          echo ::set-output name=vmip::$vmip
-          echo ::set-output name=simpleuser::$simpleuser
+          vmfqdn=$(terraform output -json -no-color vm1_fqdn | jq -r .)
+          echo ::set-output name=vmfqdn::$vmfqdn
         fi
         exit 0
       shell: bash

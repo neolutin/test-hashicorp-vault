@@ -1,6 +1,9 @@
 name: 'Setup Vault'
 description: 'Common actions to deploy an Hashicorp vault on an environment'
 inputs:
+  simple-user: 
+    description: "Password of the vault service user"
+    required: true
   secrets-environment: 
     description: "Secrets environment to create"
     required: true
@@ -22,10 +25,15 @@ inputs:
   terraformclient-secret:
     description: 'Secret of the Azure App allowed to deploy in the subscription'
     required: true
-outputs:
-  vault-token:
-    description: "Root token of the vault"
-    value: ${{ steps.setupvault.outputs.vaulttoken }}
+  ansible-client-id:
+    description: 'Client Id of the Azure App allowed used by ansible'
+    required: true
+  ansible-client-secret:
+    description: 'Secret of the Azure App allowed used by ansible'
+    required: true
+  host-name:
+    description: 'Name of the host running playbooks'
+    required: true
 
 runs:
   using: "composite"
@@ -35,6 +43,11 @@ runs:
       with:
         name: vault
         path: vault
+    - name: Setup Ansible Hosts
+      run: |
+        echo ${{ host-name }} >> hosts
+      shell: bash
+      working-directory: vault
     - name: Add azure information for vault auto-unseal
       uses: falnyr/replace-env-vars-action@v1.2.1
       env:
@@ -46,6 +59,17 @@ runs:
         KV_NAME:                ${{ inputs.kv-name }}
       with:
         filename: vault/config.hcl
+    - name: Add azure information for ansible playbook
+      uses: falnyr/replace-env-vars-action@v1.2.1
+      env:
+        AZURETENANT_ID:        ${{ inputs.azuretenant-id }}
+        KV_NAME:               ${{ inputs.kv-name }}
+        ENVIRONMENT:           ${{ inputs.secrets-environment }}
+        ANSIBLE_CLIENT_ID:     ${{ inputs.ansible-client-id }}
+        ANSIBLE_CLIENT_SECRET: ${{ inputs.ansible-client-secret }}
+        KV_RESOURCE_GROUP: 
+      with:
+        filename: vault/ansible.yml
     - name: Add policy for custom path
       uses: falnyr/replace-env-vars-action@v1.2.1
       env:

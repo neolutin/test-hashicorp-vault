@@ -22,6 +22,6 @@ module "vm1" {
   tags                = var.tags
 }
 
-output "vm1_ip_addr" {
-  value = module.vm1.vm_ip_addr
+output "vm1_fqdn" {
+  value ="vm1-${var.suffix}${module.vm1.nicdns}"
 }

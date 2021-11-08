@@ -48,7 +48,3 @@ SETTINGS
 
   tags = var.tags
 }
-
-output "vm_ip_addr" {
-  value = azurerm_linux_virtual_machine.main.public_ip_address
-}
