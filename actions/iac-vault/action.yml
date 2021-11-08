@@ -101,9 +101,10 @@ runs:
     - name: Terraform Apply
       #if: ((inputs.environment == 'prod' && github.ref == 'refs/heads/main') || (inputs.environment != 'prod' && github.ref != 'refs/heads/main')) && github.event_name == 'push'
       run: |
-        if [[ (("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main') \
-                || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main')) \
-              && "${{github.event_name}}" == "push" ]]; then
+        if [[ (
+                ("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main' && "${{github.event_name}}" == "push") \
+             || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main' && "${{github.event_name}}" == "workflow_dispatch")) \
+               ]]; then
           terraform init
           terraform workspace select ${{ inputs.environment }}
           terraform apply -auto-approve -input=false -var 'suffix=${{ inputs.resources-suffix }}'

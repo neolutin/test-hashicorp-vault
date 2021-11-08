@@ -10,6 +10,9 @@ inputs:
   kv-name:
     description: 'Name of the Azure Keyvault containing the unseal key'
     required: true
+  rg-name:
+    description: 'Name of the Azure Resource Group containing the KeyVault'
+    required: true
   terraformstorage-key:
     description: 'Key to access storage of tfstate'
     required: true
@@ -67,7 +70,7 @@ runs:
         ENVIRONMENT:           ${{ inputs.secrets-environment }}
         ANSIBLE_CLIENT_ID:     ${{ inputs.ansible-client-id }}
         ANSIBLE_CLIENT_SECRET: ${{ inputs.ansible-client-secret }}
-        KV_RESOURCE_GROUP: 
+        KV_RESOURCE_GROUP:     ${{ inputs.rg-name }}
       with:
         filename: vault/ansible.yml
     - name: Add policy for custom path
@@ -79,6 +82,6 @@ runs:
     - name: Upload Ansible Artifact
       uses: actions/upload-artifact@v2.2.4
       with:
-        name: ansible
+        name: "ansible-${{ inputs.secrets-environment }}"
         path: vault
         
