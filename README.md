@@ -2,15 +2,22 @@
 CI/Automation project to create the infrastructure and setup an Hashicorp Vault
 
 # Manual Setup
-* Create Terraform Storage Account (once for all terraform projects)
-* Create specific container (to be done for each project)
-* Register Azure resource providers (Microsoft.Network, Microsoft.Compute, Microsoft.KeyVault...)
-* Create GitHub Secrets
-* Create an AAD App Registration for terraform
-  * with delegated Microsoft Graph User.Read
-  * with application Microsoft Graph Application.ReadWrite.All & Directory.ReadWrite.All
-  * Add it as owner of the subscription
-* Create an AAD App Registration for ansible
+* In Azure:
+  * Create Terraform Storage Account (once for all terraform projects)
+  * Create specific container (to be done for each project)
+  * Register Azure resource providers (Microsoft.Network, Microsoft.Compute, Microsoft.KeyVault...)
+  * Create an AAD App Registration for terraform
+    * with delegated Microsoft Graph User.Read
+    * with application Microsoft Graph Application.ReadWrite.All & Directory.ReadWrite.All
+    * Add it as owner of the subscription
+  * Create an AAD App Registration for ansible
+* In GitHub:
+  * Create GitHub Secrets
+  * Protect main branch by adding:
+    * required PR
+    * required status on step prodInfra
+* terraform:
+  * Create at least `staging` & `prod` workspaces
 
 # Automaticaly done
 * Creation of a linux VM with vault installed in an availability set
