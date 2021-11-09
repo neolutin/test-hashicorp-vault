@@ -88,10 +88,6 @@ jobs:
     env:
       environment: staging
     runs-on: ubuntu-latest
-    outputs:
-      vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
-      ansible-app-secret: ${{ steps.iac.outputs.ansible-app-secret }}
-      ansible-app-clientid: ${{ steps.iac.outputs.ansible-app-clientid }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
@@ -116,6 +112,7 @@ jobs:
       vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
       ansible-app-secret: ${{ steps.iac.outputs.ansible-app-secret }}
       ansible-app-clientid: ${{ steps.iac.outputs.ansible-app-clientid }}
+      vault-kv-name: ${{ steps.iac.outputs.vault-kv-name }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
@@ -142,7 +139,7 @@ jobs:
       - name: File configuration for Vault
         uses: ./actions/vault-configuration
         with:
-          kv-name: "kv-${{ env.resources_suffix }}"
+          kv-name: ${{ needs.stagingInfra.outputs.vault-kv-name }}
           secrets-environment: ${{ env.environment }}
           terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
           azuretenant-id: ${{ secrets.AZURETENANT_ID }}
@@ -159,10 +156,6 @@ jobs:
     if: ${{ github.event_name == 'pull_request' }}
     needs: terraformPack
     runs-on: ubuntu-latest
-    outputs:
-      vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
-      ansible-app-secret: ${{ steps.iac.outputs.ansible-app-secret }}
-      ansible-app-clientid: ${{ steps.iac.outputs.ansible-app-clientid }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
@@ -185,6 +178,7 @@ jobs:
       vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
       ansible-app-secret: ${{ steps.iac.outputs.ansible-app-secret }}
       ansible-app-clientid: ${{ steps.iac.outputs.ansible-app-clientid }}
+      vault-kv-name: ${{ steps.iac.outputs.vault-kv-name }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
@@ -211,7 +205,7 @@ jobs:
       - name: File configuration for Vault
         uses: ./actions/vault-configuration
         with:
-          kv-name: "kv-${{ env.resources_suffix }}"
+          kv-name: ${{ needs.prodInfra.outputs.vault-kv-name }}
           secrets-environment: production
           terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
           azuretenant-id: ${{ secrets.AZURETENANT_ID }}

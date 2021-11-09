@@ -34,3 +34,7 @@ output "ansible_app_pass" {
 output "ansible_app_clientid" {
   value = "${azuread_application.ansible_app.application_id}"
 }
+
+output "kv_name" {
+  value = "${azurerm_key_vault.main_kv.name}"
+}

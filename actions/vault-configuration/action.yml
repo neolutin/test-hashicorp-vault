@@ -60,6 +60,7 @@ runs:
         TERRAFORMCLIENT_ID:     ${{ inputs.terraformclient-id }}
         TERRAFORMCLIENT_SECRET: ${{ inputs.terraformclient-secret }}
         KV_NAME:                ${{ inputs.kv-name }}
+        FQDN:                   ${{ inputs.host-name }}
       with:
         filename: vault/config.hcl
     - name: Add azure information for ansible playbook

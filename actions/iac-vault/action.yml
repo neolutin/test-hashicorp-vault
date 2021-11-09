@@ -20,6 +20,9 @@ outputs:
   vault-vm-name:
     description: "Name (FQDN or IP) of the created VM"
     value: ${{ steps.apply.outputs.vmfqdn }}
+  vault-kv-name:
+    description: "Name of the created Azure KeyVault hosting secrets"
+    value: ${{ steps.apply.outputs.kv_name }}
   ansible-app-clientid:
     description: "Application ID of the newly created app for ansible"
     value: ${{ steps.apply.outputs.ansible_app_clientid }}
@@ -113,9 +116,11 @@ runs:
           terraform apply -auto-approve -input=false -var 'suffix=${{ inputs.resources-suffix }}'
           vmfqdn=$(terraform output -json -no-color vm1_fqdn | jq -r .)
           echo "::set-output name=vmfqdn::$vmfqdn"
-          vmfqdn=$(terraform output -json -no-color ansible_app_clientid | jq -r .)
+          kv_name=$(terraform output -json -no-color kv_name | jq -r .)
+          echo "::set-output name=kv_name::$kv_name"
+          ansible_app_clientid=$(terraform output -json -no-color ansible_app_clientid | jq -r .)
           echo "::set-output name=ansible_app_clientid::$ansible_app_clientid"
-          vmfqdn=$(terraform output -json -no-color ansible_app_pass | jq -r .)
+          ansible_app_pass=$(terraform output -json -no-color ansible_app_pass | jq -r .)
           echo "::add-mask::$ansible_app_pass"
           echo "::set-output name=ansible_app_pass::$ansible_app_pass"
         fi
