@@ -90,6 +90,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
+      ansible-app-secret: ${{ steps.iac.outputs.ansible-app-secret }}
+      ansible-app-clientid: ${{ steps.iac.outputs.ansible-app-clientid }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
@@ -123,8 +125,8 @@ jobs:
           azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
           terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
-          ansible-client-id: ${{ secrets.ANSIBLE_CLIENT_ID }}
-          ansible-client-secret: ${{ secrets.ANSIBLE_CLIENT_SECRET }}
+          ansible-client-id: ${{ needs.stagingInfra.outputs.ansible-app-clientid }}
+          ansible-client-secret: ${{ needs.stagingInfra.outputs.ansible-app-secret }}
           host-name: ${{ needs.stagingInfra.outputs.vault-vm-name }}
           rg-name: "rg-${{ env.environment }}-${{ env.resources_suffix }}"
 
@@ -135,6 +137,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
+      ansible-app-secret: ${{ steps.iac.outputs.ansible-app-secret }}
+      ansible-app-clientid: ${{ steps.iac.outputs.ansible-app-clientid }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
@@ -168,7 +172,7 @@ jobs:
           azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
           terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
-          ansible-client-id: ${{ secrets.ANSIBLE_CLIENT_ID }}
-          ansible-client-secret: ${{ secrets.ANSIBLE_CLIENT_SECRET }}
-          host-name: ${{ needs.stagingInfra.outputs.vault-vm-name }}
+          ansible-client-id: ${{ needs.prodInfra.outputs.ansible-app-clientid }}
+          ansible-client-secret: ${{ needs.prodInfra.outputs.ansible-app-secret }}
+          host-name: ${{ needs.prodInfra.outputs.vault-vm-name }}
           rg-name: "rg-${{ env.environment }}-${{ env.resources_suffix }}"

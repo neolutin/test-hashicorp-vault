@@ -20,6 +20,12 @@ outputs:
   vault-vm-name:
     description: "Name (FQDN or IP) of the created VM"
     value: ${{ steps.apply.outputs.vmfqdn }}
+  ansible-app-clientid:
+    description: "Application ID of the newly created app for ansible"
+    value: ${{ steps.apply.outputs.ansible_app_clientid }}
+  ansible-app-secret:
+    description: "Secret for the ansible app"
+    value: ${{ steps.apply.outputs.ansible_app_pass }}
 
 runs:
   using: "composite"
@@ -36,10 +42,6 @@ runs:
         terraform_wrapper: false
     - name: Terraform Plan
       id: plan
-      env:
-        ARM_TENANT_ID:     ${{ inputs.azuretenant-id }}
-        ARM_CLIENT_ID:     ${{ inputs.terraformclient-id }}
-        ARM_CLIENT_SECRET: ${{ inputs.terraformclient-secret }}
       # if: github.event_name == 'pull_request' # Not yet available for composite actions
       run: |
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -101,10 +103,6 @@ runs:
     - name: Terraform Apply
       #if: ((inputs.environment == 'prod' && github.ref == 'refs/heads/main' && github.event_name == 'push') || (inputs.environment != 'prod' && github.ref != 'refs/heads/main' && github.event_name == 'pull_request'))
       id: apply
-      env:
-        ARM_TENANT_ID:     ${{ inputs.azuretenant-id }}
-        ARM_CLIENT_ID:     ${{ inputs.terraformclient-id }}
-        ARM_CLIENT_SECRET: ${{ inputs.terraformclient-secret }}
       run: |
         if [[ (
                 ("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main' && "${{github.event_name}}" == "push") \
@@ -114,7 +112,12 @@ runs:
           terraform workspace select ${{ inputs.environment }}
           terraform apply -auto-approve -input=false -var 'suffix=${{ inputs.resources-suffix }}'
           vmfqdn=$(terraform output -json -no-color vm1_fqdn | jq -r .)
-          echo ::set-output name=vmfqdn::$vmfqdn
+          echo "::set-output name=vmfqdn::$vmfqdn"
+          vmfqdn=$(terraform output -json -no-color ansible_app_clientid | jq -r .)
+          echo "::set-output name=ansible_app_clientid::$ansible_app_clientid"
+          vmfqdn=$(terraform output -json -no-color ansible_app_pass | jq -r .)
+          echo "::add-mask::$ansible_app_pass"
+          echo "::set-output name=ansible_app_pass::$ansible_app_pass"
         fi
         exit 0
       shell: bash

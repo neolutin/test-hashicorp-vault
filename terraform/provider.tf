@@ -3,7 +3,11 @@ terraform {
   required_providers {
     azuread = {
       source  = "hashicorp/azuread"
-      version = "~> 2.0.0"
+      version = "2.6.0"
+    }
+    time = {
+      source = "hashicorp/time"
+      version = "0.7.2"
     }
   }
   backend "azurerm" {
@@ -12,6 +16,9 @@ terraform {
     key                  = "terraform.tfstate"
     access_key           = "__TERRAFORMSTORAGE_KEY__=="
   }
+}
+
+provider "time" {
 }
 
 provider "azurerm" {
@@ -29,7 +36,9 @@ provider "azurerm" {
 }
 
 provider "azuread" {
-  tenant_id = "__AZURETENANT_ID__"
+  tenant_id     = "__AZURETENANT_ID__"
+  client_id     = "__TERRAFORMCLIENT_ID__"
+  client_secret = "__TERRAFORMCLIENT_SECRET__"
 }
 
 # Make client_id, tenant_id, subscription_id and object_id variables

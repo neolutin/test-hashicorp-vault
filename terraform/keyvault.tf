@@ -1,9 +1,26 @@
-data "azuread_application" "ansible" {
-  application_id = "34732622-f4ce-4a42-bc93-01d639207495"
+resource "azuread_application" "ansible_app" {
+  display_name = "ansible-${terraform.workspace}"
+  owners       = [data.azurerm_client_config.current.object_id]
+}
+
+resource "time_rotating" "rotate" {
+  rotation_days = 7
+}
+
+resource "azuread_application_password" "ansible_app_pass" {
+  application_object_id = azuread_application.ansible_app.object_id
+  display_name = "terraform-${terraform.workspace}"
+  rotate_when_changed = {
+    rotation = time_rotating.rotate.id
+  }
+}
+
+resource "azuread_service_principal" "ansible_sp" {
+  application_id = azuread_application.ansible_app.application_id
 }
 
 resource "azurerm_key_vault" "main_kv" {
-  name                        = "kv-${var.suffix}"
+  name                        = "kv-${terraform.workspace}-${var.suffix}"
   location                    = azurerm_resource_group.main.location
   resource_group_name         = azurerm_resource_group.main.name
   enabled_for_disk_encryption = true
@@ -39,7 +56,7 @@ resource "azurerm_key_vault" "main_kv" {
 
   access_policy {
     tenant_id    = data.azurerm_client_config.current.tenant_id
-    object_id    = data.azuread_application.ansible.object_id
+    object_id    = azuread_service_principal.ansible_sp.object_id
 
     secret_permissions = [
       "Get"
@@ -54,10 +71,10 @@ resource "azurerm_key_vault" "main_kv" {
   }
 }
 
-resource "azurerm_role_assignment" "ansible" {
+resource "azurerm_role_assignment" "ansible_ra" {
  scope = azurerm_key_vault.main_kv.id
  role_definition_name = "Reader"
- principal_id = data.azuread_application.ansible.application_id
+ principal_id = azuread_service_principal.ansible_sp.object_id
 }
 
 resource "random_password" "password" {
