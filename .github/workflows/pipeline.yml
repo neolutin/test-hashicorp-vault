@@ -81,8 +81,32 @@ jobs:
         name: terraform
         path: terraform
 
+  stagingCheckInfra:
+    if: ${{ github.event_name == 'pull_request' }}
+    name: "Check Staging Infrastructure"
+    needs: terraformPack
+    env:
+      environment: staging
+    runs-on: ubuntu-latest
+    outputs:
+      vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
+      ansible-app-secret: ${{ steps.iac.outputs.ansible-app-secret }}
+      ansible-app-clientid: ${{ steps.iac.outputs.ansible-app-clientid }}
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v2
+      - name: Infrastructure deployment
+        id: iac
+        uses: ./actions/iac-vault
+        with:
+          resources-suffix: ${{ env.resources_suffix }}
+          environment: ${{ env.environment }}
+          azuretenant-id: ${{ secrets.AZURETENANT_ID }}
+          terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
+          terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+
   stagingInfra:
-    if: ${{ github.ref != 'refs/heads/main' }}
+    if: ${{ github.ref != 'refs/heads/main' && github.event_name != 'pull_request' }}
     name: "Deploy Staging Infrastructure"
     needs: terraformPack
     env:
@@ -130,9 +154,31 @@ jobs:
           host-name: ${{ needs.stagingInfra.outputs.vault-vm-name }}
           rg-name: "rg-${{ env.environment }}-${{ env.resources_suffix }}"
 
+  prodCheckInfra:
+    name: "Check Production Infrastructure"
+    if: ${{ github.event_name == 'pull_request' }}
+    needs: terraformPack
+    runs-on: ubuntu-latest
+    outputs:
+      vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
+      ansible-app-secret: ${{ steps.iac.outputs.ansible-app-secret }}
+      ansible-app-clientid: ${{ steps.iac.outputs.ansible-app-clientid }}
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v2
+      - name: Infrastructure deployment
+        id: iac
+        uses: ./actions/iac-vault
+        with:
+          environment: prod
+          resources-suffix: ${{ env.resources_suffix }}
+          azuretenant-id: ${{ secrets.AZURETENANT_ID }}
+          terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
+          terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+
   prodInfra:
     name: "Deploy Production Infrastructure"
-    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'pull_request' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
     needs: terraformPack
     runs-on: ubuntu-latest
     outputs:
