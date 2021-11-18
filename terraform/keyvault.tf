@@ -59,7 +59,8 @@ resource "azurerm_key_vault" "main_kv" {
     object_id    = azuread_service_principal.ansible_sp.object_id
 
     secret_permissions = [
-      "Get"
+      "Get",
+      "Set"
     ]
     key_permissions    = []
     certificate_permissions = []

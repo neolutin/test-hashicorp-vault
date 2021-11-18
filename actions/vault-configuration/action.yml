@@ -63,6 +63,17 @@ runs:
         FQDN:                   ${{ inputs.host-name }}
       with:
         filename: vault/config.hcl
+    - name: Add policy for custom path
+      uses: falnyr/replace-env-vars-action@v1.2.1
+      env:
+        ENVIRONMENT: ${{ inputs.secrets-environment }}
+      with:
+        filename: vault/policy.hcl
+    - name: Upload Vault Artifact
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: "vault-${{ inputs.secrets-environment }}"
+        path: vault
     - name: Add azure information for ansible playbook
       uses: falnyr/replace-env-vars-action@v1.2.1
       env:
@@ -72,17 +83,12 @@ runs:
         ANSIBLE_CLIENT_ID:     ${{ inputs.ansible-client-id }}
         ANSIBLE_CLIENT_SECRET: ${{ inputs.ansible-client-secret }}
         KV_RESOURCE_GROUP:     ${{ inputs.rg-name }}
+        AZURESUSCRIPTION_ID:   ${{ inputs.azuresuscription-id }}
       with:
-        filename: vault/ansible.yml
-    - name: Add policy for custom path
-      uses: falnyr/replace-env-vars-action@v1.2.1
-      env:
-        ENVIRONMENT: ${{ inputs.secrets-environment }}
-      with:
-        filename: vault/policy.hcl
+        filename: ansible/setupVault.yml
     - name: Upload Ansible Artifact
       uses: actions/upload-artifact@v2.2.4
       with:
         name: "ansible-${{ inputs.secrets-environment }}"
-        path: vault
+        path: ansible
         

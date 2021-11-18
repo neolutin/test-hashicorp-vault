@@ -17,17 +17,23 @@ CI/Automation project to create the infrastructure and setup an Hashicorp Vault
     * required status on step prodInfra
 * terraform:
   * Create at least `staging` & `prod` workspaces
+* Use an Ubuntu VM and run the [shell installer](ansible/installansible.sh)
+  * Download the last _vault_ artifact on this VM
+  * Download the last _ansible_ artifact in the same directory and run the playbook:
+```shell
+ansible-playbook -v -i hosts setupVault.yml
+```
 
 # Automaticaly done
 * Creation of a linux VM with vault installed in an availability set
 * Deployment of the vault configuration on this VM
 
 # Todo
-* Use ansible playbook for configuration (setup-vault)
 * Hardenning
   * Create a dedicated app for azuread provider
   * Fine tune the role of the app on the azure subscription
   * Use VM MSI for Azure Vault authentification
+  * Use ssh key per environment (one for staging, one for prod...)
 * HA
   * Add an [Application Gateway](https://docs.microsoft.com/en-us/azure/application-gateway/overview) (L7 load balancing)
   * Add a second VM
