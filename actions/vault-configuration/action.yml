@@ -46,11 +46,6 @@ runs:
       with:
         name: vault
         path: vault
-    - name: Setup Ansible Hosts
-      run: |
-        echo ${{ inputs.host-name }} >> hosts
-      shell: bash
-      working-directory: vault
     - name: Add azure information for vault auto-unseal
       uses: falnyr/replace-env-vars-action@v1.2.1
       env:
@@ -74,6 +69,16 @@ runs:
       with:
         name: "vault-${{ inputs.secrets-environment }}"
         path: vault
+    - name: Download ansible config
+      uses: actions/download-artifact@v2.0.10
+      with:
+        name: ansible
+        path: ansible
+    - name: Setup Ansible Hosts
+      run: |
+        echo ${{ inputs.host-name }} >> hosts
+      shell: bash
+      working-directory: ansible
     - name: Add azure information for ansible playbook
       uses: falnyr/replace-env-vars-action@v1.2.1
       env:
