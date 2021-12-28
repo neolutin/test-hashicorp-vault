@@ -1,26 +1,39 @@
-# test-hashicorp-vault
+# Hashicorp Vault
+CI/Automation project to create the infrastructure and setup an Hashicorp Vault
 
 # Manual Setup
-* Create Terraform Storage Account (once for all terraform projects)
-* Create specific container (to be done for each project)
-* Register Azure resource providers (Microsoft.Network, Microsoft.Compute, Microsoft.KeyVault...)
-* Create GitHub Secrets
-* Create an AAD App Registration
-  * with delegated Microsoft Graph User.Read
-  * with application Microsoft Graph Application.ReadWrite.All & Directory.ReadWrite.All
-  * Add it as owner of the subscription
+* In Azure:
+  * Create Terraform Storage Account (once for all terraform projects)
+  * Create specific container (to be done for each project)
+  * Register Azure resource providers (Microsoft.Network, Microsoft.Compute, Microsoft.KeyVault...)
+  * Create an AAD App Registration for terraform
+    * with delegated Microsoft Graph User.Read
+    * with application Microsoft Graph Application.ReadWrite.All & Directory.ReadWrite.All
+    * Add it as owner of the subscription
+* In GitHub:
+  * Create GitHub Secrets
+  * Protect main branch by adding:
+    * required PR
+    * required status on step prodInfra
+* terraform:
+  * Create at least `staging` & `prod` workspaces
+* Use an Ubuntu VM and run the [shell installer](ansible/installansible.sh)
+  * Download the last _vault_ artifact on this VM
+  * Download the last _ansible_ artifact in the same directory and run the playbook:
+```shell
+ansible-playbook -v -i hosts setupVault.yml
+```
 
 # Automaticaly done
 * Creation of a linux VM with vault installed in an availability set
 * Deployment of the vault configuration on this VM
 
 # Todo
-* Make the CI Reentrant (actions after vault operator init)
 * Hardenning
-  * Segregate app usage (only one is used)
-  * Connect from github to Azure vault to get sensitive data
+  * Create a dedicated app for azuread provider
   * Fine tune the role of the app on the azure subscription
   * Use VM MSI for Azure Vault authentification
+  * Use ssh key per environment (one for staging, one for prod...)
 * HA
   * Add an [Application Gateway](https://docs.microsoft.com/en-us/azure/application-gateway/overview) (L7 load balancing)
   * Add a second VM

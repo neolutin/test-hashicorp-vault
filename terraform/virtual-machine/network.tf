@@ -3,6 +3,7 @@ resource "azurerm_public_ip" "pip" {
   resource_group_name = var.resource_group_name
   location            = var.location
   allocation_method   = "Dynamic"
+  domain_name_label   = "${var.suffix}"
 
   tags = var.tags
 }
@@ -39,4 +40,8 @@ resource "azurerm_network_interface" "internal" {
 resource "azurerm_network_interface_security_group_association" "main" {
   network_interface_id      = azurerm_network_interface.internal.id
   network_security_group_id = var.security_group_id
+}
+
+output "fqdn" {
+  value = azurerm_public_ip.pip.fqdn
 }

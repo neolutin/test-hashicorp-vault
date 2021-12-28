@@ -1,0 +1,153 @@
+- hosts: vaultservers
+  become: yes
+  collections:
+    - azure.azcollection
+  vars:
+    system_user: vault
+    system_group: vault
+    vault_username: simple
+    first_kv: 'notS0S33cret!'
+    tenant_id: __AZURETENANT_ID__
+    client_id: __ANSIBLE_CLIENT_ID__
+    client_secret: '__ANSIBLE_CLIENT_SECRET__'
+    subscription_id: __AZURESUSCRIPTION_ID__
+    secrets_environment: __ENVIRONMENT__
+    resource_group: __KV_RESOURCE_GROUP__
+    vault_name: __KV_NAME__
+
+  tasks:
+  - name: Setup Vault Address
+    set_fact: vault_addr="http://{{ inventory_hostname }}:8200"
+    tags: preparevm
+
+  - name: Get Key Vault by name
+    azure_rm_keyvault_info:
+      resource_group: "{{ resource_group }}"
+      name: "{{ vault_name }}"
+      tenant: "{{ tenant_id }}"
+      client_id: "{{ client_id }}"
+      secret: "{{ client_secret }}"
+      subscription_id: "{{ subscription_id }}"
+    register: keyvault
+    delegate_facts: true
+    delegate_to: 127.0.0.1
+    tags: azure
+
+  - name: Show Vault uri
+    debug:
+      var: keyvault
+      verbosity: 1
+    tags: azure
+
+  - name: set KeyVault uri fact
+    set_fact: keyvaulturi="{{ keyvault['keyvaults'][0]['vault_uri'] }}"
+    tags: azure
+
+  - name: Get latest version of vault service user
+    azure_rm_keyvaultsecret_info:
+      vault_uri: "{{ keyvaulturi }}"
+      name: "simplepassword"
+      tenant: "{{ tenant_id }}"
+      client_id: "{{ client_id }}"
+      secret: "{{ client_secret }}"
+      subscription_id: "{{ subscription_id }}"
+    register: kvSecret
+    delegate_facts: true
+    delegate_to: 127.0.0.1
+    tags: azure
+
+  - name: Set secret fact
+    set_fact: userpass="{{ kvSecret['secrets'][0]['secret'] }}"
+    tags: azure
+
+  - name: Copy Vault config file
+    copy:
+      src: config.hcl
+      dest: /etc/vault.d/vault.hcl
+      owner: "{{ system_user }}"
+      group: "{{ system_group }}"
+      mode: u=rw,g=r,o=r
+    tags: preparevm
+
+  - name: Copy Vault service file
+    copy:
+      src: vault.service
+      dest: /etc/systemd/system/vault.service
+      owner: "{{ system_user }}"
+      group: "{{ system_group }}"
+      mode: u=rw,g=r,o=r
+    tags: preparevm
+
+  - name: Setup internal storage
+    file:
+      path: /vault/data/
+      state: directory
+      owner: "{{ system_user }}"
+      group: "{{ system_group }}"
+      mode: u=rwx,g=rx,o=rx
+    tags: preparevm
+
+  - name: Make sure vault service is running
+    systemd:
+      state: started
+      enabled: yes
+      masked: no
+      name: vault
+    tags: preparevm
+
+  - name: Initialize Vault
+    shell: |
+      vault operator init -format=json > /tmp/init.json
+      jq -r .root_token < /tmp/init.json
+    register: vault_token
+    environment:  
+      VAULT_ADDR: "{{ vault_addr }}"
+      VAULT_SKIP_VERIFY: 'true'
+
+  - name: Get initialization values
+    stat:
+      path: /tmp/init.json
+    register: vault_init
+
+  - name: Debug KeyVault uri
+    debug:
+      msg: Vault init file size is {{ vault_init.stat.size }}
+      verbosity: 1
+
+  - name: Create an Azure KeyVault Secret
+    azure_rm_keyvaultsecret:
+      secret_name: vaultRootToken
+      secret_value: "{{ vault_token.stdout }}"
+      keyvault_uri: "{{ keyvaulturi }}"
+      tenant: "{{ tenant_id }}"
+      client_id: "{{ client_id }}"
+      secret: "{{ client_secret }}"
+      subscription_id: "{{ subscription_id }}"
+    delegate_facts: true
+    delegate_to: 127.0.0.1
+    tags: azure
+
+  - name: Delete sensible file
+    file:
+      path: /tmp/init.json
+      state: absent
+
+  - name: Setup Vault
+    shell: |
+      vault login -no-print
+      vault auth enable userpass
+      vault policy write {{ secrets_environment }}-policy policy.hcl
+      vault write auth/userpass/users/{{ vault_username }} password={{ userpass }} policies={{ secrets_environment }}-policy
+      vault secrets enable -path={{ secrets_environment }} kv
+    environment:  
+      VAULT_ADDR: "{{ vault_addr }}"
+      VAULT_SKIP_VERIFY: 'true'
+      VAULT_TOKEN: "{{ vault_token.stdout }}"
+
+  - name: Create First KV
+    shell: |
+      vault login -no-print -method=userpass username=simple password={{ userpass }}
+      vault kv put {{ secrets_environment }}/my-secret value={{ first_kv }}
+    environment:  
+      VAULT_ADDR: "{{ vault_addr }}"
+      VAULT_SKIP_VERIFY: 'true'

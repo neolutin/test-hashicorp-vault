@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       logLevel:
@@ -15,111 +15,209 @@ on:
         description: 'Manual tag'
 
 env:
-  staging_resources_suffix: "neolutinvault-stag-01"
-  production_resources_suffix: "neolutinvault-prod-01"
+  resources_suffix: "neolutin-01"
 
 jobs:
   terraformPack:
+    name: "Package Artifacts"
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v1.2.1
-      with:
-        terraform_version: 1.0
-    - name: Upload terraform Artifact
-      uses: actions/upload-artifact@v2.2.4
-      with:
-        name: terraform
-        path: terraform
     - name: Upload vault config
       uses: actions/upload-artifact@v2.2.4
       with:
         name: vault
         path: vault
+    - name: Upload vault config
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: ansible
+        path: ansible
+    - name: Add Azure information in terraform provider
+      uses: falnyr/replace-env-vars-action@v1.2.1
+      env:
+        TERRAFORMSTORAGE_KEY:   ${{ secrets.TERRAFORMSTORAGE_KEY }}
+        AZURETENANT_ID:         ${{ secrets.AZURETENANT_ID }}
+        AZURESUSCRIPTION_ID:    ${{ secrets.AZURESUSCRIPTION_ID }}
+        TERRAFORMCLIENT_ID:     ${{ secrets.TERRAFORMCLIENT_ID }}
+        TERRAFORMCLIENT_SECRET: ${{ secrets.TERRAFORMCLIENT_SECRET }}
+      with:
+        filename: terraform/provider.tf
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1.2.1
+      with:
+        terraform_version: 1.0
+        terraform_wrapper: false
+    - name: Terraform Format
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true
+    - name: Terraform Init
+      id: init
+      run: terraform init
+      continue-on-error: true
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+      continue-on-error: true
+    - name: Update Pull Request
+      uses: actions/github-script@0.9.0
+      if: github.event_name == 'pull_request'
+      with:
+        script: |
+          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+    - name: Terraform Check Status
+      if: steps.fmt.outcome == 'failure' || steps.init.outcome == 'failure' || steps.validate.outcome == 'failure'
+      run: exit 1
+      shell: bash
+    - name: Upload terraform Artifact
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: terraform
+        path: terraform
+
+  stagingCheckInfra:
+    if: ${{ github.event_name == 'pull_request' }}
+    name: "Check Staging Infrastructure"
+    needs: terraformPack
+    env:
+      environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v2
+      - name: Infrastructure deployment
+        id: iac
+        uses: ./actions/iac-vault
+        with:
+          resources-suffix: ${{ env.resources_suffix }}
+          environment: ${{ env.environment }}
+          azuretenant-id: ${{ secrets.AZURETENANT_ID }}
+          terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
+          terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
 
   stagingInfra:
+    if: ${{ github.ref != 'refs/heads/main' && github.event_name != 'pull_request' }}
+    name: "Deploy Staging Infrastructure"
     needs: terraformPack
-    if: ${{ github.ref != 'refs/heads/main' }}
+    env:
+      environment: staging
     runs-on: ubuntu-latest
     outputs:
-      vmip: ${{ steps.iac.outputs.vault-vm-name }}
-      simpleuser: ${{ steps.iac.outputs.simple-user }}
+      vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
+      ansible-app-secret: ${{ steps.iac.outputs.ansible-app-secret }}
+      ansible-app-clientid: ${{ steps.iac.outputs.ansible-app-clientid }}
+      vault-kv-name: ${{ steps.iac.outputs.vault-kv-name }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
-      - id: iac
+      - name: Infrastructure deployment
+        id: iac
         uses: ./actions/iac-vault
         with:
-          resources-suffix: ${{ env.staging_resources_suffix }}
-          terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
+          resources-suffix: ${{ env.resources_suffix }}
+          environment: ${{ env.environment }}
           azuretenant-id: ${{ secrets.AZURETENANT_ID }}
-          azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
           terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
 
-  setupStagingVault:
+  prepareStagingConf:
+    if: ${{ github.ref != 'refs/heads/main' && github.event_name != 'pull_request' }}
+    name: "Prepare Staging Vault Configuration"
     needs: stagingInfra
-    if: ${{ github.ref != 'refs/heads/main' }}
+    env:
+      environment: staging
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
-      - id: setup
-        uses: ./actions/setup-vault
+      - name: File configuration for Vault
+        uses: ./actions/vault-configuration
         with:
-          vault-vm-name: ${{ needs.stagingInfra.outputs.vmip }}
-          simple-user: ${{ needs.stagingInfra.outputs.simpleuser }}
-          kv-name: "kv-${{ env.staging_resources_suffix }}"
-          secrets-environment: staging
+          kv-name: ${{ needs.stagingInfra.outputs.vault-kv-name }}
+          secrets-environment: ${{ env.environment }}
           terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
           azuretenant-id: ${{ secrets.AZURETENANT_ID }}
           azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
           terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
-          ssh-key: ${{ secrets.VM_SSH_KEY }}
+          ansible-client-id: ${{ needs.stagingInfra.outputs.ansible-app-clientid }}
+          ansible-client-secret: ${{ needs.stagingInfra.outputs.ansible-app-secret }}
+          host-name: ${{ needs.stagingInfra.outputs.vault-vm-name }}
+          rg-name: "rg-${{ env.environment }}-${{ env.resources_suffix }}"
+
+  prodCheckInfra:
+    name: "Check Production Infrastructure"
+    if: ${{ github.event_name == 'pull_request' }}
+    needs: terraformPack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v2
+      - name: Infrastructure deployment
+        id: iac
+        uses: ./actions/iac-vault
+        with:
+          environment: prod
+          resources-suffix: ${{ env.resources_suffix }}
+          azuretenant-id: ${{ secrets.AZURETENANT_ID }}
+          terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
+          terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
 
   prodInfra:
+    name: "Deploy Production Infrastructure"
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
     needs: terraformPack
-    environment:
-      name: production
-    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     outputs:
-      vmip: ${{ steps.iac.outputs.vault-vm-name }}
-      simpleuser: ${{ steps.iac.outputs.simple-user }}
+      vault-vm-name: ${{ steps.iac.outputs.vault-vm-name }}
+      ansible-app-secret: ${{ steps.iac.outputs.ansible-app-secret }}
+      ansible-app-clientid: ${{ steps.iac.outputs.ansible-app-clientid }}
+      vault-kv-name: ${{ steps.iac.outputs.vault-kv-name }}
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
-      - id: iac
+      - name: Infrastructure deployment
+        id: iac
         uses: ./actions/iac-vault
         with:
-          resources-suffix: ${{ env.production_resources_suffix }}
-          terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
+          environment: prod
+          resources-suffix: ${{ env.resources_suffix }}
           azuretenant-id: ${{ secrets.AZURETENANT_ID }}
-          azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
           terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
 
-  setupprodVault:
+  prepareProdConf:
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    name: "Prepare Production Vault Configuration"
     needs: prodInfra
     environment:
       name: production
-    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v2
-      - id: setup
-        uses: ./actions/setup-vault
+      - name: File configuration for Vault
+        uses: ./actions/vault-configuration
         with:
-          kv-name: "kv-${{ env.production_resources_suffix }}"
-          vault-vm-name: ${{ needs.prodInfra.outputs.vmip }}
-          simple-user: ${{ needs.prodInfra.outputs.simpleuser }}
+          kv-name: ${{ needs.prodInfra.outputs.vault-kv-name }}
           secrets-environment: production
           terraformstorage-key: ${{ secrets.TERRAFORMSTORAGE_KEY }}
           azuretenant-id: ${{ secrets.AZURETENANT_ID }}
           azuresuscription-id: ${{ secrets.AZURESUSCRIPTION_ID }}
           terraformclient-id: ${{ secrets.TERRAFORMCLIENT_ID }}
           terraformclient-secret: ${{ secrets.TERRAFORMCLIENT_SECRET }}
-          ssh-key: ${{ secrets.VM_SSH_KEY }}
+          ansible-client-id: ${{ needs.prodInfra.outputs.ansible-app-clientid }}
+          ansible-client-secret: ${{ needs.prodInfra.outputs.ansible-app-secret }}
+          host-name: ${{ needs.prodInfra.outputs.vault-vm-name }}
+          rg-name: "rg-${{ env.environment }}-${{ env.resources_suffix }}"

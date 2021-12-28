@@ -40,15 +40,10 @@ resource "azurerm_virtual_machine_extension" "installvault" {
   type                 = "CustomScript"
   type_handler_version = "2.0"
 
-  settings = <<SETTINGS
+    protected_settings = <<PROT
     {
-        "commandToExecute": "curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add - && sudo apt-add-repository \"deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main\" && sudo apt-get update && sudo apt-get install -y vault jq"
+        "script": "${base64encode(file("setupvm.sh"))}"
     }
-SETTINGS
-
+    PROT
   tags = var.tags
-}
-
-output "vm_ip_addr" {
-  value = azurerm_linux_virtual_machine.main.public_ip_address
 }

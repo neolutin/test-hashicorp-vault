@@ -4,14 +4,11 @@ inputs:
   resources-suffix:
     description: 'Suffix to apply to the resource names (i.e. env-num)'
     required: true
-  terraformstorage-key:
-    description: 'Key to access storage of tfstate'
-    required: true
+  environment:
+    description: 'Terraform workspace'
+    default: "dev"
   azuretenant-id:
     description: 'Azure tenant'
-    required: true
-  azuresuscription-id:
-    description: 'Azure subscription where the infra will be deployed'
     required: true
   terraformclient-id:
     description: 'Client Id of the Azure App allowed to deploy in the subscription'
@@ -22,10 +19,16 @@ inputs:
 outputs:
   vault-vm-name:
     description: "Name (FQDN or IP) of the created VM"
-    value: ${{ steps.getinfravalues.outputs.vmip }}
-  simple-user:
-    description: "Generated password for the created service user"
-    value: ${{ steps.getinfravalues.outputs.simpleuser }}
+    value: ${{ steps.apply.outputs.vmfqdn }}
+  vault-kv-name:
+    description: "Name of the created Azure KeyVault hosting secrets"
+    value: ${{ steps.apply.outputs.kv_name }}
+  ansible-app-clientid:
+    description: "Application ID of the newly created app for ansible"
+    value: ${{ steps.apply.outputs.ansible_app_clientid }}
+  ansible-app-secret:
+    description: "Secret for the ansible app"
+    value: ${{ steps.apply.outputs.ansible_app_pass }}
 
 runs:
   using: "composite"
@@ -40,30 +43,87 @@ runs:
       with:
         terraform_version: 1.0
         terraform_wrapper: false
-    - name: Add Azure information in terraform provider
-      uses: falnyr/replace-env-vars-action@v1.2.1
-      env:
-        TERRAFORMSTORAGE_KEY:   ${{ inputs.terraformstorage-key }}
-        AZURETENANT_ID:         ${{ inputs.azuretenant-id }}
-        AZURESUSCRIPTION_ID:    ${{ inputs.azuresuscription-id }}
-        TERRAFORMCLIENT_ID:     ${{ inputs.terraformclient-id }}
-        TERRAFORMCLIENT_SECRET: ${{ inputs.terraformclient-secret }}
-        RESOURCES_NAME:         ${{ inputs.resources-suffix }}
-      with:
-        filename: terraform/provider.tf
-    - name: Deploy
+    - name: Terraform Plan
+      id: plan
+      # if: github.event_name == 'pull_request' # Not yet available for composite actions
       run: |
-        terraform init
-        terraform plan -input=false -var 'suffix=${{ inputs.resources-suffix }}' -out='out.tfplan'
-        terraform apply out.tfplan
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          echo ::set-output name=outcome::success
+          terraform init \
+            && terraform workspace select ${{ inputs.environment }} \
+            && terraform plan -no-color -input=false -var 'suffix=${{ inputs.resources-suffix }}' > plan.out \
+            || echo ::set-output name=outcome::failure
+          # Workaround on composite actions to keep multilines
+          PLAN_OUT=$(cat plan.out)
+          PLAN_OUT="${PLAN_OUT//'%'/'%25'}"
+          PLAN_OUT="${PLAN_OUT//$'\n'/'%0A'}"
+          PLAN_OUT="${PLAN_OUT//$'\r'/'%0D'}"
+          echo "::set-output name=stdout::$PLAN_OUT"
+        fi
+        exit 0
+      # continue-on-error: true # Not yet available for composite actions
       shell: bash
       working-directory: terraform
-    - name: 'Get Infra Outputs'
-      id: getinfravalues
+    - name: Update Pull Request
+      uses: actions/github-script@0.9.0
+      # if: github.event_name == 'pull_request' # Not yet available for composite actions
+      env:
+        # PLAN: "terraform\n${{ steps.plan.stdout }}" # to be tested outside composite actions
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        script: |
+          if ('${{ github.event_name }}' !== 'pull_request') {
+            return // Only available for pull requests
+          }
+
+          const {PLAN} = process.env
+          const output = `#### Terraform Plan 📖\`${{ steps.plan.outputs.outcome }}\`
+
+          <details><summary>Show ${{ inputs.environment }} Plan</summary>
+
+          \`\`\`\n
+          ${PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+    - name: Terraform Plan Status
+      # if: steps.plan.outcome == 'failure' # Not yet available for composite actions
       run: |
-        vmip=$(terraform output -json -no-color vm1_ip_addr | jq -r .)
-        simpleuser=$(terraform output -json -no-color simple_password | jq -r .value)
-        echo ::set-output name=vmip::$vmip
-        echo ::set-output name=simpleuser::$simpleuser
+        if [[ "${{ steps.plan.outputs.outcome }}" == "failure" ]]; then
+          exit 1
+        fi
+        exit 0
+      shell: bash
+    - name: Terraform Apply
+      #if: ((inputs.environment == 'prod' && github.ref == 'refs/heads/main' && github.event_name == 'push') || (inputs.environment != 'prod' && github.ref != 'refs/heads/main' && github.event_name == 'pull_request'))
+      id: apply
+      run: |
+        if [[ (
+                ("${{inputs.environment}}" == "prod" && "${{github.ref}}" == 'refs/heads/main' && "${{github.event_name}}" == "push") \
+             || ("${{inputs.environment}}" != "prod" && "${{github.ref}}" != 'refs/heads/main' && "${{github.event_name}}" != "pull_request")) \
+               ]]; then
+          terraform init
+          terraform workspace select ${{ inputs.environment }}
+          terraform apply -auto-approve -input=false -var 'suffix=${{ inputs.resources-suffix }}'
+          vmfqdn=$(terraform output -json -no-color vm1_fqdn | jq -r .)
+          echo "::set-output name=vmfqdn::$vmfqdn"
+          kv_name=$(terraform output -json -no-color kv_name | jq -r .)
+          echo "::set-output name=kv_name::$kv_name"
+          ansible_app_clientid=$(terraform output -json -no-color ansible_app_clientid | jq -r .)
+          echo "::set-output name=ansible_app_clientid::$ansible_app_clientid"
+          ansible_app_pass=$(terraform output -json -no-color ansible_app_pass | jq -r .)
+          echo "::add-mask::$ansible_app_pass"
+          echo "::set-output name=ansible_app_pass::$ansible_app_pass"
+        fi
+        exit 0
       shell: bash
       working-directory: terraform
