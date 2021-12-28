@@ -18,6 +18,7 @@
   tasks:
   - name: Setup Vault Address
     set_fact: vault_addr="http://{{ inventory_hostname }}:8200"
+    tags: preparevm
 
   - name: Get Key Vault by name
     azure_rm_keyvault_info:
@@ -30,14 +31,17 @@
     register: keyvault
     delegate_facts: true
     delegate_to: 127.0.0.1
+    tags: azure
 
   - name: Show Vault uri
     debug:
       var: keyvault
       verbosity: 1
+    tags: azure
 
   - name: set KeyVault uri fact
     set_fact: keyvaulturi="{{ keyvault['keyvaults'][0]['vault_uri'] }}"
+    tags: azure
 
   - name: Get latest version of vault service user
     azure_rm_keyvaultsecret_info:
@@ -50,9 +54,11 @@
     register: kvSecret
     delegate_facts: true
     delegate_to: 127.0.0.1
+    tags: azure
 
   - name: Set secret fact
     set_fact: userpass="{{ kvSecret['secrets'][0]['secret'] }}"
+    tags: azure
 
   - name: Copy Vault config file
     copy:
@@ -61,6 +67,7 @@
       owner: "{{ system_user }}"
       group: "{{ system_group }}"
       mode: u=rw,g=r,o=r
+    tags: preparevm
 
   - name: Copy Vault service file
     copy:
@@ -69,14 +76,16 @@
       owner: "{{ system_user }}"
       group: "{{ system_group }}"
       mode: u=rw,g=r,o=r
+    tags: preparevm
 
-  - name: Change file ownership, group and permissions
+  - name: Setup internal storage
     file:
-      path: /vault/data
+      path: /vault/data/
       state: directory
       owner: "{{ system_user }}"
       group: "{{ system_group }}"
-      mode: u=rw,g=r,o=r
+      mode: u=rwx,g=rx,o=rx
+    tags: preparevm
 
   - name: Make sure vault service is running
     systemd:
@@ -84,6 +93,7 @@
       enabled: yes
       masked: no
       name: vault
+    tags: preparevm
 
   - name: Initialize Vault
     shell: |
@@ -107,7 +117,7 @@
   - name: Create an Azure KeyVault Secret
     azure_rm_keyvaultsecret:
       secret_name: vaultRootToken
-      secret_value: "{{ vault_token }}"
+      secret_value: "{{ vault_token.stdout }}"
       keyvault_uri: "{{ keyvaulturi }}"
       tenant: "{{ tenant_id }}"
       client_id: "{{ client_id }}"
@@ -115,6 +125,7 @@
       subscription_id: "{{ subscription_id }}"
     delegate_facts: true
     delegate_to: 127.0.0.1
+    tags: azure
 
   - name: Delete sensible file
     file:
@@ -131,7 +142,7 @@
     environment:  
       VAULT_ADDR: "{{ vault_addr }}"
       VAULT_SKIP_VERIFY: 'true'
-      VAULT_TOKEN: "{{ vault_token }}"
+      VAULT_TOKEN: "{{ vault_token.stdout }}"
 
   - name: Create First KV
     shell: |

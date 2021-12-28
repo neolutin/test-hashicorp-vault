@@ -28,6 +28,11 @@ jobs:
       with:
         name: vault
         path: vault
+    - name: Upload vault config
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: ansible
+        path: ansible
     - name: Add Azure information in terraform provider
       uses: falnyr/replace-env-vars-action@v1.2.1
       env:
